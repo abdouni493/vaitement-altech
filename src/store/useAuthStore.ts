@@ -6,6 +6,7 @@ import { INITIAL_USERS } from '@/data/seedData'
 import { idbStorage, onRehydrate, storeKey } from './persist'
 import { useWorkerStore } from './useWorkerStore'
 import {
+  getSessionProfile,
   isSupabaseConfigured,
   signInWithSupabase,
   signOutFromSupabase,
@@ -46,6 +47,12 @@ interface AuthState {
    * on-device accounts — so the boutique still opens when the line is down.
    */
   login: (identifier: string, password: string) => Promise<AppUser | null>
+  /**
+   * Re-checks the signed-in account once the stores are back from IndexedDB.
+   * Runs on every boot so a page refresh keeps the session, while an account
+   * that was deactivated or revoked meanwhile is signed out.
+   */
+  restoreSession: () => Promise<void>
   createAdmin: (data: {
     fullName: string
     username: string
@@ -111,6 +118,35 @@ export const useAuthStore = create<AuthState>()(
         return null
       },
 
+      restoreSession: async () => {
+        const user = get().currentUser
+        if (!user) return
+
+        // Staff sign in through their worker record, so the record stays the
+        // source of truth: revoking the account, deactivating the worker or
+        // narrowing their permissions takes effect on the next load.
+        const worker = useWorkerStore.getState().workers.find((w) => w.id === user.id)
+        if (worker) {
+          set({ currentUser: worker.hasAccount && worker.active ? workerAsUser(worker) : null })
+          return
+        }
+
+        // The owner's on-device account — refresh it in case the profile was
+        // edited from the settings page on another tab.
+        const local = get().users.find((u) => u.id === user.id)
+        if (local) {
+          set({ currentUser: local })
+          return
+        }
+
+        // Anything else came from Supabase. Revalidate the stored session, but
+        // keep the user signed in when the project is simply unreachable.
+        if (!isSupabaseConfigured) return
+        const check = await getSessionProfile()
+        if (check.status === 'ok') set({ currentUser: profileAsUser(check.profile) })
+        else if (check.status === 'signed-out') set({ currentUser: null })
+      },
+
       createAdmin: async ({ fullName, username, email, password }) => {
         // Mirror the owner into Supabase auth when configured; a failure there
         // (offline, email already taken) must not block the local install.
@@ -152,8 +188,10 @@ export const useAuthStore = create<AuthState>()(
     {
       name: storeKey('auth'),
       storage: idbStorage(),
-      // Accounts persist; the active session does not — login is required each time.
-      partialize: (s) => ({ users: s.users }),
+      // Accounts *and* the active session persist, so a refresh lands the user
+      // back on the page they were on instead of the login screen.
+      // `restoreSession` revalidates that session on the next boot.
+      partialize: (s) => ({ users: s.users, currentUser: s.currentUser }),
       onRehydrateStorage: onRehydrate('auth'),
     },
   ),

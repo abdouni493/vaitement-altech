@@ -1,4 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useLocation,
+} from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { Layout } from '@/components/layout/Layout'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -31,7 +39,13 @@ import { ShopThankYou } from '@/shop/ShopThankYou'
 
 const RequireAuth = () => {
   const currentUser = useAuthStore((s) => s.currentUser)
-  return currentUser ? <Outlet /> : <Navigate to="/login" replace />
+  const location = useLocation()
+  if (currentUser) return <Outlet />
+  // Hand the login screen the page that was asked for, so signing in returns
+  // the user there rather than dropping them on the dashboard.
+  return (
+    <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  )
 }
 
 /** Shown while the stores load their data from the local IndexedDB database. */
@@ -46,6 +60,15 @@ const Splash = () => (
 
 export default function App() {
   const hydrated = useHydrated()
+  const restoreSession = useAuthStore((s) => s.restoreSession)
+
+  // The session is read back from IndexedDB with everything else, so the UI
+  // renders straight away on the current page. This only revalidates it in the
+  // background — an account revoked since the last visit is signed out here.
+  useEffect(() => {
+    if (hydrated) void restoreSession()
+  }, [hydrated, restoreSession])
+
   if (!hydrated) return <Splash />
 
   return (

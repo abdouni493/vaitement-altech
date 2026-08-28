@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,6 +26,8 @@ const darkLabel = 'mb-1.5 block text-[10px] font-bold uppercase tracking-widest 
 export const Login = () => {
   const { t, toggleLang, lang } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
+  const currentUser = useAuthStore((s) => s.currentUser)
   const login = useAuthStore((s) => s.login)
   const users = useAuthStore((s) => s.users)
   const createAdmin = useAuthStore((s) => s.createAdmin)
@@ -34,6 +36,9 @@ export const Login = () => {
 
   /** The owner account exists → the creation flow retires itself for good. */
   const adminExists = hasAdmin(users)
+
+  /** The page the guard turned away, so signing in resumes it. */
+  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
 
   const {
     register,
@@ -45,7 +50,7 @@ export const Login = () => {
     const user = await login(data.identifier, data.password)
     if (user) {
       toast.success(`${t('welcomeBack')}, ${user.fullName}`)
-      navigate('/dashboard')
+      navigate(from, { replace: true })
     } else {
       toast.error(t('wrongCredentials'))
     }
@@ -81,6 +86,10 @@ export const Login = () => {
     toast.success(t('accountCreated'))
     navigate('/dashboard')
   }
+
+  // Already signed in — reaching /login by refresh, a bookmark or the back
+  // button should not ask for the password again.
+  if (currentUser) return <Navigate to={from} replace />
 
   const storeName = settings.name || t('appName')
 

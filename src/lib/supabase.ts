@@ -68,6 +68,43 @@ export const signInWithSupabase = async (
   return profile as ProfileRow
 }
 
+/** What the stored Supabase session amounts to when the app boots again. */
+export type SessionCheck =
+  | { status: 'ok'; profile: ProfileRow }
+  | { status: 'signed-out' }
+  | { status: 'unreachable' }
+
+/**
+ * Re-read the session Supabase kept in local storage and load its profile.
+ *
+ * Called on every boot so a refresh keeps the user signed in. A revoked or
+ * deactivated account resolves to `signed-out`; a network failure resolves to
+ * `unreachable`, which the caller treats as "stay signed in" — being offline
+ * must never throw the user back to the login screen.
+ */
+export const getSessionProfile = async (): Promise<SessionCheck> => {
+  if (!supabase) return { status: 'signed-out' }
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) return { status: 'unreachable' }
+
+    const user = data.session?.user
+    if (!user) return { status: 'signed-out' }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, email, role, is_admin, permissions, active')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) return { status: 'unreachable' }
+    if (!profile || profile.active === false) return { status: 'signed-out' }
+    return { status: 'ok', profile: profile as ProfileRow }
+  } catch {
+    return { status: 'unreachable' }
+  }
+}
+
 /**
  * Register the owner account. The `handle_new_user` trigger in the schema
  * creates the matching `profiles` row, so nothing is inserted here.
