@@ -1,7 +1,9 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Worker, WorkerAdvance, WorkerAbsence, WorkerPayment, Permissions } from '@/types'
 import { uid } from '@/utils/helpers'
 import { INITIAL_WORKERS, INITIAL_ROLES } from '@/data/seedData'
+import { idbStorage, onRehydrate, storeKey } from './persist'
 
 interface WorkerState {
   workers: Worker[]
@@ -16,7 +18,9 @@ interface WorkerState {
   addPayment: (workerId: string, payment: Omit<WorkerPayment, 'id'>) => void
 }
 
-export const useWorkerStore = create<WorkerState>()((set) => ({
+export const useWorkerStore = create<WorkerState>()(
+  persist(
+    (set) => ({
   workers: INITIAL_WORKERS,
   roles: INITIAL_ROLES,
   addWorker: (data) => {
@@ -63,4 +67,12 @@ export const useWorkerStore = create<WorkerState>()((set) => ({
         }
       }),
     })),
-}))
+    }),
+    {
+      name: storeKey('workers'),
+      storage: idbStorage(),
+      partialize: (s) => ({ workers: s.workers, roles: s.roles }),
+      onRehydrateStorage: onRehydrate('workers'),
+    },
+  ),
+)

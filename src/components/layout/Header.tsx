@@ -1,12 +1,25 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
-import { Bell, ChevronRight, Globe, LogOut, AlertTriangle, Ruler } from 'lucide-react'
+import {
+  Bell,
+  ChevronRight,
+  Globe,
+  LogOut,
+  AlertTriangle,
+  Ruler,
+  Moon,
+  Sun,
+  ExternalLink,
+  ShoppingBag,
+} from 'lucide-react'
 import { useTranslation } from '@/i18n/useTranslation'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useProductStore } from '@/store/useProductStore'
+import { useOrderStore } from '@/store/useOrderStore'
+import { useThemeStore } from '@/store/useThemeStore'
 import { NAV_ITEMS } from './navConfig'
-import { initials, brokenSizes } from '@/utils/helpers'
+import { initials, brokenSizes, formatMoney } from '@/utils/helpers'
 import type { Product } from '@/types'
 
 export const Header = () => {
@@ -16,6 +29,9 @@ export const Header = () => {
   const currentUser = useAuthStore((s) => s.currentUser)
   const logout = useAuthStore((s) => s.logout)
   const products = useProductStore((s) => s.products)
+  const orders = useOrderStore((s) => s.orders)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const [notifOpen, setNotifOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -32,7 +48,9 @@ export const Header = () => {
     return rows.sort((a, b) => b.missing.length - a.missing.length)
   }, [products])
 
-  const alertCount = lowStock.length + missingSizes.length
+  const newOrders = useMemo(() => orders.filter((o) => o.status === 'pending'), [orders])
+
+  const alertCount = lowStock.length + missingSizes.length + newOrders.length
 
   const current = NAV_ITEMS.find((i) => location.pathname.startsWith(i.path))
   const crumb = current ? t(current.labelKey) : ''
@@ -42,47 +60,73 @@ export const Header = () => {
     navigate('/login')
   }
 
+  const iconBtn =
+    'flex items-center justify-center border border-wood-light bg-wood-white p-2 text-wood-medium transition hover:border-wood-warm hover:text-wood-dark'
+
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-wood-light/20 bg-wood-white/80 px-6 py-3 backdrop-blur-md">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-wood-light bg-wood-white/90 px-4 py-2.5 backdrop-blur-md sm:px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link to="/dashboard" className="text-wood-medium/70 hover:text-wood-warm">
+      <div className="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+        <Link to="/dashboard" className="shrink-0 text-wood-medium transition hover:text-wood-dark">
           {t('appName')}
         </Link>
         {crumb && (
           <>
-            <ChevronRight size={14} className="text-wood-medium/40 rtl:rotate-180" />
-            <span className="font-semibold text-wood-dark">{crumb}</span>
+            <ChevronRight size={13} className="shrink-0 text-wood-medium/40 rtl:rotate-180" />
+            <span className="truncate text-wood-dark">{crumb}</span>
           </>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* Storefront */}
+        <a
+          href="/shop"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t('visitWebsite')}
+          className="hidden items-center gap-1.5 bg-wood-btn px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-accentfg transition hover:opacity-85 sm:flex"
+        >
+          <ExternalLink size={14} />
+          {t('visitWebsite')}
+        </a>
+
+        {/* Theme */}
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? t('lightMode') : t('darkMode')}
+          title={theme === 'dark' ? t('lightMode') : t('darkMode')}
+          className={iconBtn}
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </motion.button>
+
         {/* Language */}
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ scale: 0.94 }}
           onClick={toggleLang}
-          className="flex items-center gap-1.5 rounded-xl border border-wood-light/40 bg-white/70 px-3 py-2 text-xs font-semibold text-wood-medium transition hover:bg-wood-cream"
+          aria-label={t('language')}
+          className={`${iconBtn} gap-1.5 px-2.5 text-[10px] font-bold`}
         >
-          <Globe size={16} />
+          <Globe size={15} />
           {lang === 'fr' ? 'FR' : 'ع'}
         </motion.button>
 
         {/* Notifications */}
         <div className="relative">
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => {
               setNotifOpen((v) => !v)
               setMenuOpen(false)
             }}
-            className="relative rounded-xl border border-wood-light/40 bg-white/70 p-2 text-wood-medium transition hover:bg-wood-cream"
+            aria-label={t('stockAlerts')}
+            className={`relative ${iconBtn}`}
           >
-            <Bell size={18} />
+            <Bell size={16} />
             {alertCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-terracotta px-1 text-[10px] font-bold text-white">
+              <span className="text-mono absolute -end-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center bg-terracotta px-1 text-[9px] font-bold leading-none text-white">
                 {alertCount}
               </span>
             )}
@@ -90,29 +134,57 @@ export const Header = () => {
           <AnimatePresence>
             {notifOpen && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                className="card-wood absolute end-0 mt-2 w-80 rounded-2xl p-3 shadow-wood-lg"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.18 }}
+                className="card-wood absolute end-0 mt-2 w-80 p-2 shadow-wood-lg"
               >
                 {alertCount === 0 ? (
-                  <p className="px-1 py-3 text-center text-xs text-wood-medium">{t('noData')}</p>
+                  <p className="px-1 py-4 text-center text-xs text-wood-medium">{t('noData')}</p>
                 ) : (
                   <div className="max-h-80 space-y-3 overflow-y-auto">
+                    {newOrders.length > 0 && (
+                      <div>
+                        <p className="eyebrow mb-1 px-1">{t('newOrders')}</p>
+                        <div className="space-y-0.5">
+                          {newOrders.slice(0, 6).map((o) => (
+                            <Link
+                              key={o.id}
+                              to="/web-orders"
+                              onClick={() => setNotifOpen(false)}
+                              className="flex items-center gap-2 p-2 transition hover:bg-wood-cream"
+                            >
+                              <ShoppingBag size={15} className="shrink-0 text-wood-dark" />
+                              <span className="min-w-0 flex-1 truncate text-xs font-medium text-wood-dark">
+                                {o.customerName}
+                              </span>
+                              <span className="text-mono shrink-0 text-[11px] font-bold text-wood-dark">
+                                {formatMoney(o.total)}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {lowStock.length > 0 && (
                       <div>
-                        <p className="mb-1 px-1 text-xs font-bold uppercase tracking-wide text-wood-medium">{t('stockAlerts')}</p>
-                        <div className="space-y-1">
-                          {lowStock.map((p) => (
+                        <p className="eyebrow mb-1 px-1">{t('stockAlerts')}</p>
+                        <div className="space-y-0.5">
+                          {lowStock.slice(0, 8).map((p) => (
                             <Link
                               key={p.id}
                               to="/stock"
                               onClick={() => setNotifOpen(false)}
-                              className="flex items-center gap-2 rounded-lg p-2 transition hover:bg-wood-cream"
+                              className="flex items-center gap-2 p-2 transition hover:bg-wood-cream"
                             >
-                              <AlertTriangle size={16} className="shrink-0 text-terracotta" />
-                              <span className="flex-1 truncate text-xs font-medium text-wood-dark">{p.name}</span>
-                              <span className="text-xs font-bold text-terracotta">{p.quantity}/{p.minQuantity}</span>
+                              <AlertTriangle size={15} className="shrink-0 text-terracotta" />
+                              <span className="min-w-0 flex-1 truncate text-xs font-medium text-wood-dark">
+                                {p.name}
+                              </span>
+                              <span className="text-mono shrink-0 text-[11px] font-bold text-terracotta">
+                                {p.quantity}/{p.minQuantity}
+                              </span>
                             </Link>
                           ))}
                         </div>
@@ -120,22 +192,20 @@ export const Header = () => {
                     )}
                     {missingSizes.length > 0 && (
                       <div>
-                        <p className="mb-1 px-1 text-xs font-bold uppercase tracking-wide text-wood-medium">
-                          {t('missingSizes')}
-                        </p>
-                        <div className="space-y-1">
-                          {missingSizes.map(({ product, missing }) => (
+                        <p className="eyebrow mb-1 px-1">{t('missingSizes')}</p>
+                        <div className="space-y-0.5">
+                          {missingSizes.slice(0, 8).map(({ product, missing }) => (
                             <Link
                               key={product.id}
                               to="/stock"
                               onClick={() => setNotifOpen(false)}
-                              className="flex items-center gap-2 rounded-lg p-2 transition hover:bg-wood-cream"
+                              className="flex items-center gap-2 p-2 transition hover:bg-wood-cream"
                             >
-                              <Ruler size={16} className="shrink-0 text-wood-warm" />
-                              <span className="flex-1 truncate text-xs font-medium text-wood-dark">
+                              <Ruler size={15} className="shrink-0 text-wood-medium" />
+                              <span className="min-w-0 flex-1 truncate text-xs font-medium text-wood-dark">
                                 {product.name}
                               </span>
-                              <span className="text-xs font-bold text-wood-warm">
+                              <span className="shrink-0 text-[11px] font-bold text-wood-medium">
                                 {missing.join(' · ')}
                               </span>
                             </Link>
@@ -152,42 +222,56 @@ export const Header = () => {
 
         {/* User */}
         <div className="relative">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
+          <button
             onClick={() => {
               setMenuOpen((v) => !v)
               setNotifOpen(false)
             }}
-            className="flex items-center gap-2 rounded-xl border border-wood-light/40 bg-white/70 py-1.5 pe-3 ps-1.5 transition hover:bg-wood-cream"
+            className="flex items-center gap-2 border border-wood-light bg-wood-white py-1 pe-3 ps-1 transition hover:border-wood-warm"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-wood-btn text-xs font-bold text-white">
+            <div className="flex h-7 w-7 items-center justify-center bg-wood-btn text-[10px] font-bold text-accentfg">
               {initials(currentUser?.fullName ?? 'U')}
             </div>
-            <div className="text-start">
-              <p className="text-xs font-bold leading-none text-wood-dark">{currentUser?.fullName}</p>
-              <p className="mt-0.5 text-[10px] text-wood-medium">{currentUser?.role}</p>
+            <div className="hidden text-start sm:block">
+              <p className="text-[11px] font-bold leading-none text-wood-dark">
+                {currentUser?.fullName}
+              </p>
+              <p className="mt-0.5 text-[9px] uppercase tracking-wide text-wood-medium">
+                {currentUser?.role}
+              </p>
             </div>
-          </motion.button>
+          </button>
           <AnimatePresence>
             {menuOpen && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                className="card-wood absolute end-0 mt-2 w-48 rounded-2xl p-2 shadow-wood-lg"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.18 }}
+                className="card-wood absolute end-0 mt-2 w-48 p-1.5 shadow-wood-lg"
               >
                 <Link
                   to="/settings"
                   onClick={() => setMenuOpen(false)}
-                  className="block rounded-lg px-3 py-2 text-sm text-wood-dark transition hover:bg-wood-cream"
+                  className="block px-3 py-2 text-xs font-medium text-wood-dark transition hover:bg-wood-cream"
                 >
                   {t('myAccount')}
                 </Link>
+                <a
+                  href="/shop"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-wood-dark transition hover:bg-wood-cream sm:hidden"
+                >
+                  <ExternalLink size={14} />
+                  {t('visitWebsite')}
+                </a>
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-terracotta transition hover:bg-terracotta/10"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-terracotta transition hover:bg-terracotta/10"
                 >
-                  <LogOut size={15} />
+                  <LogOut size={14} />
                   {t('logout')}
                 </button>
               </motion.div>

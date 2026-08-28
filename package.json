@@ -10,9 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@supabase/supabase-js": "^2.112.4",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.3.8",
     "html2canvas": "^1.4.1",
+    "idb-keyval": "^6.3.0",
     "jsbarcode": "^3.11.6",
     "lucide-react": "^0.417.0",
     "react": "^18.3.1",

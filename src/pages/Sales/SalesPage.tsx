@@ -83,7 +83,7 @@ export const SalesPage = () => {
         <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-xl border border-wood-light/40 bg-white/70 p-1">
             {(['all', 'today', 'week', 'month'] as QuickFilter[]).map((q) => (
-              <button key={q} onClick={() => setQuick(q)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${quick === q ? 'bg-wood-btn text-white' : 'text-wood-medium hover:bg-wood-cream'}`}>
+              <button key={q} onClick={() => setQuick(q)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${quick === q ? 'bg-wood-btn text-accentfg' : 'text-wood-medium hover:bg-wood-cream'}`}>
                 {q === 'all' ? t('all') : q === 'today' ? t('today') : q === 'week' ? t('thisWeek') : t('thisMonth')}
               </button>
             ))}
@@ -232,7 +232,7 @@ const SaleEdit = ({ sale, onChange }: { sale: Sale; onChange: (discount: number)
     <div className="space-y-3">
       <div className="flex justify-between rounded-xl bg-wood-cream/40 px-3 py-2 text-sm"><span className="text-wood-medium">{t('subtotal')}</span><span className="text-mono font-bold">{formatMoney(sale.subtotal)}</span></div>
       <Input label={t('discount')} type="number" value={discount} onChange={(e) => { const v = Number(e.target.value); setDiscount(v); onChange(v) }} />
-      <div className="flex justify-between rounded-xl bg-wood-btn px-3 py-2 text-white"><span>{t('toPay')}</span><span className="text-mono font-bold">{formatMoney(Math.max(0, sale.subtotal - discount))}</span></div>
+      <div className="flex justify-between rounded-xl bg-wood-btn px-3 py-2 text-accentfg"><span>{t('toPay')}</span><span className="text-mono font-bold">{formatMoney(Math.max(0, sale.subtotal - discount))}</span></div>
     </div>
   )
 }

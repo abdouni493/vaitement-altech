@@ -1,8 +1,10 @@
 // ----------------------------------------------------------------------------
 // Backup / restore
 // ----------------------------------------------------------------------------
-// The app holds all state in memory (no database, no localStorage), so a backup
-// is a snapshot of the stores and a restore writes straight back into them.
+// Data lives in a local IndexedDB database (see src/store/persist.ts). A backup
+// is a JSON snapshot of the stores; a restore writes straight back into them,
+// which the persist middleware then saves to IndexedDB. Handy for moving the
+// boutique's data to another machine or keeping an off-device copy.
 // ----------------------------------------------------------------------------
 
 import { useProductStore } from '@/store/useProductStore'

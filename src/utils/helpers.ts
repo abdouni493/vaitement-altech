@@ -101,6 +101,8 @@ export const fullPermissions = (): Permissions => {
     'caisse',
     'reports',
     'settings',
+    'website',
+    'weborders',
   ]
   const out: Permissions = {}
   mods.forEach((m) => {

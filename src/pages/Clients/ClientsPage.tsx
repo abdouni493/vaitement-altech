@@ -79,7 +79,7 @@ export const ClientsPage = () => {
               return (
                 <motion.div key={c.id} variants={cardVariants} custom={i} layout whileHover={{ y: -4 }} className="card-wood rounded-2xl p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-wood-btn font-bold text-white">{initials(c.name)}</div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-wood-btn font-bold text-accentfg">{initials(c.name)}</div>
                     <div className="min-w-0">
                       <h3 className="truncate font-bold text-wood-dark">{c.name}</h3>
                       <p className="flex items-center gap-1 text-xs text-wood-medium"><Phone size={12} />{c.phone || '—'}</p>

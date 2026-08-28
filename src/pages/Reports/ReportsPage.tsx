@@ -53,7 +53,9 @@ import { useSupplierStore } from '@/store/useSupplierStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useCaisseStore } from '@/store/useCaisseStore'
 import { useTranslation } from '@/i18n/useTranslation'
+import { useChartTheme } from '@/utils/chartTheme'
 import { formatMoney, compareSizes } from '@/utils/helpers'
+import { WebChannelReport } from './WebChannelReport'
 import {
   sumSales,
   sumPurchases,
@@ -75,29 +77,6 @@ import {
 } from '@/utils/calculations'
 import type { TranslationKey } from '@/i18n/translations'
 
-/**
- * Chart palette — brass, ink and the accent hues of the boutique. Ordered so
- * neighbouring series stay distinguishable, and each holds ≥3:1 against white.
- */
-const CHART_COLORS = [
-  '#A16207', // brass
-  '#1C1917', // ink
-  '#047857', // emerald
-  '#BE123C', // couture red
-  '#B45309', // amber
-  '#0F766E', // teal
-  '#7C2D12', // chestnut
-  '#57534E', // stone
-  '#854D0E', // bronze
-]
-
-const AXIS = { fontSize: 11, fill: '#57534E' }
-const TOOLTIP_STYLE = {
-  borderRadius: 12,
-  border: '1px solid #D9C7A3',
-  background: '#FFFFFF',
-  fontSize: 12,
-}
 
 // ----------------------------------------------------------------------------
 // Building blocks
@@ -114,19 +93,19 @@ const SummaryCard = ({
   color: string
   icon: React.ReactNode
 }) => (
-  <div className="card-wood rounded-2xl p-4">
-    <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white ${color}`}>
-      {icon}
-    </div>
-    <p className="mt-3 text-xs text-wood-medium">{label}</p>
-    <p className="text-mono text-xl font-bold text-wood-dark">{formatMoney(value)}</p>
+  <div className="card-wood p-4">
+    <div className={`flex h-9 w-9 items-center justify-center text-white ${color}`}>{icon}</div>
+    <p className="eyebrow mt-3">{label}</p>
+    <p className="text-mono mt-1 text-lg font-black leading-tight text-wood-dark [font-size:clamp(0.95rem,1.6vw,1.25rem)]">
+      {formatMoney(value)}
+    </p>
   </div>
 )
 
 const MiniStat = ({ label, value, tone }: { label: string; value: string; tone?: string }) => (
-  <div className="card-wood rounded-xl p-3">
-    <p className="text-[11px] text-wood-medium">{label}</p>
-    <p className={`text-mono text-lg font-bold ${tone ?? 'text-wood-dark'}`}>{value}</p>
+  <div className="card-wood p-3">
+    <p className="eyebrow">{label}</p>
+    <p className={`text-mono mt-1 text-lg font-black ${tone ?? 'text-wood-dark'}`}>{value}</p>
   </div>
 )
 
@@ -139,8 +118,8 @@ const Section = ({
   icon: React.ReactNode
   children: React.ReactNode
 }) => (
-  <section className="card-wood rounded-2xl p-5">
-    <h2 className="mb-4 flex items-center gap-2 text-display text-lg font-bold text-wood-dark">
+  <section className="card-wood p-5">
+    <h2 className="mb-4 flex items-center gap-2.5 border-b border-wood-light pb-3 text-display text-sm font-black uppercase tracking-wide text-wood-dark">
       <span className="text-wood-warm">{icon}</span>
       {title}
     </h2>
@@ -175,9 +154,9 @@ const ReportTable = ({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b-2 border-wood-light text-xs uppercase tracking-wide text-wood-medium">
+          <tr className="border-b border-wood-dark text-[10px] font-bold uppercase tracking-widest text-wood-medium">
             {head.map((h, i) => (
-              <th key={i} className={`py-2 font-semibold ${cls(alignOf(i))}`}>
+              <th key={i} className={`py-2 ${cls(alignOf(i))}`}>
                 {h}
               </th>
             ))}
@@ -185,7 +164,7 @@ const ReportTable = ({
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-wood-cream last:border-0 hover:bg-wood-cream/40">
+            <tr key={i} className="border-b border-wood-light last:border-0 hover:bg-wood-cream/60">
               {row.map((cell, j) => (
                 <td
                   key={j}
@@ -219,6 +198,12 @@ export const ReportsPage = () => {
   const suppliers = useSupplierStore((s) => s.suppliers)
   const settings = useSettingsStore((s) => s.settings)
   const transactions = useCaisseStore((s) => s.transactions)
+
+  // Recharts needs literal colours, so the palette is resolved from the theme.
+  const chart = useChartTheme()
+  const CHART_COLORS = chart.colors
+  const AXIS = chart.axis
+  const TOOLTIP_STYLE = chart.tooltip
 
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -345,7 +330,7 @@ export const ReportsPage = () => {
       />
 
       {/* Period picker */}
-      <div className="card-wood mb-5 rounded-2xl p-4">
+      <div className="card-wood mb-5 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="label-wood">{t('from')}</label>
@@ -370,13 +355,13 @@ export const ReportsPage = () => {
             {t('generateReport')}
           </Button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-wood-light/60 pt-3">
-          <span className="text-xs font-medium text-wood-medium">{t('quickRanges')}:</span>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-wood-light pt-3">
+          <span className="eyebrow">{t('quickRanges')}</span>
           {quickRanges.map((r) => (
             <button
               key={r.label}
               onClick={() => applyRange(r.range())}
-              className="rounded-lg border border-wood-light bg-white px-2.5 py-1 text-xs font-medium text-wood-medium transition hover:border-wood-warm hover:text-wood-warm"
+              className="border border-wood-light bg-wood-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-wood-medium transition hover:border-wood-warm hover:text-wood-dark"
             >
               {r.label}
             </button>
@@ -393,7 +378,7 @@ export const ReportsPage = () => {
             exit={{ opacity: 0 }}
             className="flex flex-col items-center justify-center gap-3 py-20"
           >
-            <Loader2 className="animate-spin text-wood-warm" size={40} />
+            <Loader2 className="animate-spin text-wood-dark" size={32} />
             <p className="text-sm text-wood-medium">{t('loading')}</p>
           </motion.div>
         ) : report ? (
@@ -406,7 +391,7 @@ export const ReportsPage = () => {
           >
             {/* Print-only header */}
             <div className="hidden print:block">
-              <h1 className="text-display text-2xl font-bold text-wood-dark">{settings.name}</h1>
+              <h1 className="text-display text-2xl font-black uppercase text-wood-dark">{settings.name}</h1>
               <p className="text-sm text-wood-medium">
                 {t('reports')} — {format(report.start, 'dd/MM/yyyy')} →{' '}
                 {format(report.end, 'dd/MM/yyyy')}
@@ -415,7 +400,7 @@ export const ReportsPage = () => {
 
             {/* ── Financial summary ──────────────────────────────────────── */}
             <section>
-              <h2 className="mb-3 text-display text-xl font-bold text-wood-dark">
+              <h2 className="text-hero mb-4 text-[clamp(1.35rem,3.5vw,2rem)] text-wood-dark">
                 {t('financialSummary')}
               </h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -424,9 +409,13 @@ export const ReportsPage = () => {
                 <SummaryCard label={t('totalExpenses')} value={report.totalExpenses} color="bg-terracotta" icon={<IconExpense size={18} />} />
                 <SummaryCard label={t('totalSalaries')} value={report.totalSalaries} color="bg-gold" icon={<IconPayroll size={18} />} />
                 <SummaryCard label={t('grossMargin')} value={report.grossMargin} color="bg-wood-dark" icon={<IconMargin size={18} />} />
-                <div className="card-wood rounded-2xl bg-wood-btn p-4 text-white">
-                  <p className="text-xs opacity-90">{t('netProfit')}</p>
-                  <p className="text-mono mt-2 text-xl font-bold">{formatMoney(report.netProfit)}</p>
+                <div className="bg-wood-btn p-4 text-accentfg">
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+                    {t('netProfit')}
+                  </p>
+                  <p className="text-mono mt-3 text-lg font-black leading-tight [font-size:clamp(0.95rem,1.6vw,1.25rem)]">
+                    {formatMoney(report.netProfit)}
+                  </p>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -436,6 +425,15 @@ export const ReportsPage = () => {
                 <MiniStat label={t('avgBasket')} value={formatMoney(report.avgBasket)} />
               </div>
             </section>
+
+            {/* ── ONLINE CHANNEL — the website's own performance ──────────── */}
+            <WebChannelReport
+              start={report.start}
+              end={report.end}
+              storeRevenue={report.totalSales}
+              Section={Section}
+              ReportTable={ReportTable}
+            />
 
             {/* ── SIZE ANALYSIS — the boutique's own view ─────────────────── */}
             <Section title={t('sizeAnalysis')} icon={<IconSize size={18} />}>
@@ -453,7 +451,7 @@ export const ReportsPage = () => {
                           different scales, so a single axis would flatten one. */}
                       <ResponsiveContainer width="100%" height={240}>
                         <BarChart data={report.sizeCats.map((c) => ({ ...c, label: sizeLabel(c.sizeCategory) }))}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#EADFC8" />
+                          <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
                           <XAxis dataKey="label" tick={{ ...AXIS, fontSize: 10 }} interval={0} />
                           <YAxis yAxisId="qty" tick={AXIS} />
                           <YAxis
@@ -469,8 +467,8 @@ export const ReportsPage = () => {
                             contentStyle={TOOLTIP_STYLE}
                           />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Bar yAxisId="qty" dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
-                          <Bar yAxisId="rev" dataKey="revenue" name={t('revenue')} fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} />
+                          <Bar yAxisId="qty" dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[0]} />
+                          <Bar yAxisId="rev" dataKey="revenue" name={t('revenue')} fill={CHART_COLORS[1]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -486,11 +484,11 @@ export const ReportsPage = () => {
                           layout="vertical"
                           margin={{ left: 8, right: 16 }}
                         >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#EADFC8" horizontal={false} />
+                          <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} horizontal={false} />
                           <XAxis type="number" tick={AXIS} />
                           <YAxis type="category" dataKey="label" width={110} tick={{ ...AXIS, fontSize: 10 }} />
                           <Tooltip formatter={(v: number) => `${v}`} contentStyle={TOOLTIP_STYLE} />
-                          <Bar dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+                          <Bar dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -665,11 +663,11 @@ export const ReportsPage = () => {
                   {report.bestSellers.length > 0 && (
                     <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={report.bestSellers} layout="vertical" margin={{ left: 8, right: 16 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#EADFC8" horizontal={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} horizontal={false} />
                         <XAxis type="number" tick={AXIS} />
                         <YAxis type="category" dataKey="name" width={100} tick={{ ...AXIS, fontSize: 9 }} />
                         <Tooltip formatter={(v: number) => `${v}`} contentStyle={TOOLTIP_STYLE} />
-                        <Bar dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="quantity" name={t('qtySold')} fill={CHART_COLORS[2]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}

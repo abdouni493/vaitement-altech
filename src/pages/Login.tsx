@@ -5,10 +5,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Shirt, Globe, UserPlus, LogIn, ChevronDown } from 'lucide-react'
-import { useAuthStore } from '@/store/useAuthStore'
+import { Globe, UserPlus, LogIn, ChevronDown, ExternalLink, ShieldCheck } from 'lucide-react'
+import { useAuthStore, hasAdmin } from '@/store/useAuthStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTranslation } from '@/i18n/useTranslation'
-import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 
 const loginSchema = z.object({
@@ -17,13 +17,23 @@ const loginSchema = z.object({
 })
 type LoginForm = z.infer<typeof loginSchema>
 
+/** Dark-surface field: the login screen is the one page that is always black. */
+const darkField =
+  'w-full border border-white/20 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-white focus:bg-white/10'
+
+const darkLabel = 'mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-white/50'
+
 export const Login = () => {
   const { t, toggleLang, lang } = useTranslation()
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const users = useAuthStore((s) => s.users)
   const createAdmin = useAuthStore((s) => s.createAdmin)
+  const settings = useSettingsStore((s) => s.settings)
   const [showCreate, setShowCreate] = useState(false)
+
+  /** The owner account exists → the creation flow retires itself for good. */
+  const adminExists = hasAdmin(users)
 
   const {
     register,
@@ -31,8 +41,8 @@ export const Login = () => {
     formState: { errors },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) })
 
-  const onLogin = (data: LoginForm) => {
-    const user = login(data.identifier, data.password)
+  const onLogin = async (data: LoginForm) => {
+    const user = await login(data.identifier, data.password)
     if (user) {
       toast.success(`${t('welcomeBack')}, ${user.fullName}`)
       navigate('/dashboard')
@@ -41,7 +51,6 @@ export const Login = () => {
     }
   }
 
-  // create-account form
   const createSchema = z
     .object({
       fullName: z.string().min(2),
@@ -55,8 +64,14 @@ export const Login = () => {
 
   const createForm = useForm<CreateForm>({ resolver: zodResolver(createSchema) })
 
-  const onCreate = (data: CreateForm) => {
-    const user = createAdmin({
+  const onCreate = async (data: CreateForm) => {
+    // A second administrator can never be created from the public login page.
+    if (hasAdmin(useAuthStore.getState().users)) {
+      toast.error(t('adminExists'))
+      setShowCreate(false)
+      return
+    }
+    const user = await createAdmin({
       fullName: data.fullName,
       username: data.username,
       email: data.email,
@@ -67,134 +82,250 @@ export const Login = () => {
     navigate('/dashboard')
   }
 
+  const storeName = settings.name || t('appName')
+
   return (
-    <div className="wood-grain relative flex min-h-screen items-center justify-center overflow-hidden bg-wood-sidebar p-4">
-      {/* decorative blobs */}
-      <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-gold/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-wood-light/20 blur-3xl" />
+    <div className="relative flex min-h-screen bg-black">
+      {/* ── Editorial half: the brand, full-bleed ──────────────────────────── */}
+      <div className="wood-grain relative hidden flex-1 overflow-hidden border-e border-white/10 lg:flex">
+        <div className="absolute inset-0 flex flex-col justify-between p-14">
+          <div className="flex items-center gap-3">
+            {settings.logo ? (
+              <img src={settings.logo} alt="" className="h-11 w-11 object-cover" />
+            ) : (
+              <div className="flex h-11 w-11 items-center justify-center bg-white">
+                <span className="text-display text-xl font-black text-black">
+                  {storeName.slice(0, 1).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <span className="text-display text-sm font-black uppercase tracking-widest text-white">
+              {storeName}
+            </span>
+          </div>
 
-      {/* Language toggle */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={toggleLang}
-        className="glass absolute end-5 top-5 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white"
-      >
-        <Globe size={16} />
-        {lang === 'fr' ? 'العربية' : 'Français'}
-      </motion.button>
+          <div>
+            {/* Each word rises from behind its own mask — the signature reveal. */}
+            {[t('appName'), t('appSubtitle')].map((line, i) => (
+              <span key={line} className="block overflow-hidden">
+                <motion.span
+                  initial={{ y: '110%' }}
+                  animate={{ y: 0 }}
+                  transition={{ delay: 0.15 + i * 0.12, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                  className={
+                    i === 0
+                      ? 'text-hero block text-[clamp(2.75rem,6vw,5.5rem)] text-white'
+                      : 'text-hero block text-[clamp(2.75rem,6vw,5.5rem)] text-white/25'
+                  }
+                >
+                  {line}
+                </motion.span>
+              </span>
+            ))}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6, duration: 0.6 }}
+              className="mt-6 max-w-md text-sm leading-relaxed text-white/45"
+            >
+              {settings.description || t('appTagline')}
+            </motion.p>
+          </div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="relative z-10 w-full max-w-md"
-      >
-        {/* Logo */}
-        <motion.div
-          initial={{ scale: 0, rotate: -20 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ delay: 0.2, type: 'spring', damping: 12 }}
-          className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-shine shadow-gold"
-        >
-          <Shirt size={38} className="text-wood-dark" />
-        </motion.div>
-        <div className="mb-6 text-center">
-          <h1 className="text-display text-4xl font-bold text-white">{t('appName')}</h1>
-          <p className="mt-1 text-sm text-wood-blonde/80">{t('appTagline')}</p>
+          <div className="flex items-center gap-8 text-[10px] font-bold uppercase tracking-widest text-white/35">
+            <span>{t('deliveryToAllWilayas')}</span>
+            <span className="h-3 w-px bg-white/20" />
+            <span>{t('securePayment')}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Form half ──────────────────────────────────────────────────────── */}
+      <div className="relative flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-[520px] lg:shrink-0">
+        {/* Utilities */}
+        <div className="absolute end-6 top-6 flex items-center gap-2 sm:end-12">
+          <a
+            href="/shop"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 border border-white/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white/70 transition hover:border-white hover:text-white"
+          >
+            <ExternalLink size={13} />
+            {t('visitWebsite')}
+          </a>
+          <button
+            type="button"
+            onClick={toggleLang}
+            className="flex items-center gap-1.5 border border-white/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white/70 transition hover:border-white hover:text-white"
+          >
+            <Globe size={13} />
+            {lang === 'fr' ? 'ع' : 'FR'}
+          </button>
         </div>
 
-        {/* Card */}
-        <div className="glass rounded-3xl p-7 shadow-wood-lg">
-          <p className="mb-5 text-center text-sm text-white/80">{t('loginSubtitle')}</p>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto w-full max-w-sm"
+        >
+          {/* Compact brand for the small-screen layout */}
+          <div className="mb-10 flex items-center gap-3 lg:hidden">
+            {settings.logo ? (
+              <img src={settings.logo} alt="" className="h-10 w-10 object-cover" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center bg-white">
+                <span className="text-display text-lg font-black text-black">
+                  {storeName.slice(0, 1).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <span className="text-display text-sm font-black uppercase tracking-widest text-white">
+              {storeName}
+            </span>
+          </div>
 
-          <form onSubmit={handleSubmit(onLogin)} className="space-y-4">
+          <p className="eyebrow text-white/40">{t('login')}</p>
+          <h2 className="text-hero mt-2 text-4xl text-white">{t('welcomeBack')}</h2>
+          <p className="mt-3 text-xs leading-relaxed text-white/45">{t('loginSubtitle')}</p>
+
+          <form onSubmit={handleSubmit(onLogin)} className="mt-8 space-y-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/90">{t('email')}</label>
+              <label className={darkLabel}>{t('email')}</label>
               <input
                 {...register('identifier')}
-                placeholder="admin@atelier-mode.com"
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-white/40 focus:border-gold focus:ring-2 focus:ring-gold/30"
+                autoComplete="username"
+                placeholder="admin@boutique.com"
+                className={darkField}
               />
-              {errors.identifier && <p className="mt-1 text-xs text-terracotta">{t('required')}</p>}
+              {errors.identifier && (
+                <p className="mt-1.5 text-[11px] text-terracotta">{t('required')}</p>
+              )}
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/90">{t('password')}</label>
+              <label className={darkLabel}>{t('password')}</label>
               <input
                 type="password"
+                autoComplete="current-password"
                 {...register('password')}
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-white/40 focus:border-gold focus:ring-2 focus:ring-gold/30"
+                className={darkField}
               />
-              {errors.password && <p className="mt-1 text-xs text-terracotta">{t('required')}</p>}
+              {errors.password && (
+                <p className="mt-1.5 text-[11px] text-terracotta">{t('required')}</p>
+              )}
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              <LogIn size={18} />
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-black transition hover:bg-white/85"
+            >
+              <LogIn size={16} />
               {t('login')}
-            </Button>
+            </button>
           </form>
 
-          {/* Create admin toggle */}
-          {users.length === 0 && (
-            <button
-              onClick={() => setShowCreate((v) => !v)}
-              className="mt-4 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-wood-blonde/90 transition hover:text-gold-light"
-            >
-              <UserPlus size={16} />
-              {t('createAdmin')}
-              <ChevronDown size={16} className={`transition ${showCreate ? 'rotate-180' : ''}`} />
-            </button>
-          )}
-
-          <AnimatePresence>
-            {showCreate && users.length === 0 && (
-              <motion.form
+          {/* First-run: the boutique has no owner yet */}
+          <AnimatePresence initial={false}>
+            {!adminExists && (
+              <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                onSubmit={createForm.handleSubmit(onCreate)}
-                className="mt-4 space-y-3 overflow-hidden border-t border-white/15 pt-4"
+                className="overflow-hidden"
               >
-                <Input label={<span className="text-white/90">{t('fullName')}</span>} {...createForm.register('fullName')} error={createForm.formState.errors.fullName && t('required')} className="bg-white/90" />
-                <Input label={<span className="text-white/90">{t('username')}</span>} {...createForm.register('username')} error={createForm.formState.errors.username && t('required')} className="bg-white/90" />
-                <Input label={<span className="text-white/90">{t('email')}</span>} type="email" {...createForm.register('email')} error={createForm.formState.errors.email && t('required')} className="bg-white/90" />
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label={<span className="text-white/90">{t('password')}</span>} type="password" {...createForm.register('password')} error={createForm.formState.errors.password && t('required')} className="bg-white/90" />
-                  <Input label={<span className="text-white/90">{t('confirmPassword')}</span>} type="password" {...createForm.register('confirm')} error={createForm.formState.errors.confirm?.message} className="bg-white/90" />
+                <div className="mt-7 border-t border-white/10 pt-6">
+                  <p className="flex items-start gap-2 border border-white/15 bg-white/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-white/60">
+                    <ShieldCheck size={14} className="mt-px shrink-0" />
+                    {t('firstRunHint')}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate((v) => !v)}
+                    className="mt-3 flex w-full items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest text-white transition hover:opacity-70"
+                  >
+                    <UserPlus size={14} />
+                    {t('createAdmin')}
+                    <ChevronDown
+                      size={14}
+                      className={`transition-transform duration-300 ${showCreate ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showCreate && (
+                      <motion.form
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        onSubmit={createForm.handleSubmit(onCreate)}
+                        className="mt-4 space-y-3 overflow-hidden"
+                      >
+                        <div>
+                          <label className={darkLabel}>{t('fullName')}</label>
+                          <input {...createForm.register('fullName')} className={darkField} />
+                          {createForm.formState.errors.fullName && (
+                            <p className="mt-1 text-[11px] text-terracotta">{t('required')}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className={darkLabel}>{t('username')}</label>
+                          <input {...createForm.register('username')} className={darkField} />
+                          {createForm.formState.errors.username && (
+                            <p className="mt-1 text-[11px] text-terracotta">{t('required')}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className={darkLabel}>{t('email')}</label>
+                          <input
+                            type="email"
+                            {...createForm.register('email')}
+                            className={darkField}
+                          />
+                          {createForm.formState.errors.email && (
+                            <p className="mt-1 text-[11px] text-terracotta">{t('required')}</p>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={darkLabel}>{t('password')}</label>
+                            <input
+                              type="password"
+                              {...createForm.register('password')}
+                              className={darkField}
+                            />
+                            {createForm.formState.errors.password && (
+                              <p className="mt-1 text-[11px] text-terracotta">{t('required')}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className={darkLabel}>{t('confirmPassword')}</label>
+                            <input
+                              type="password"
+                              {...createForm.register('confirm')}
+                              className={darkField}
+                            />
+                            {createForm.formState.errors.confirm && (
+                              <p className="mt-1 text-[11px] text-terracotta">
+                                {createForm.formState.errors.confirm.message}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button type="submit" size="lg" className="w-full !bg-white !text-black">
+                          <UserPlus size={16} />
+                          {t('createMyAdmin')}
+                        </Button>
+                      </motion.form>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <Button type="submit" variant="sage" size="lg" className="w-full">
-                  <UserPlus size={18} />
-                  {t('createMyAdmin')}
-                </Button>
-              </motion.form>
+              </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Demo access — the app ships with constant data, so surface the keys */}
-          {users.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-white/15 bg-white/5 p-3">
-              <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-wood-blonde/80">
-                {t('demoAccess')}
-              </p>
-              <div className="space-y-1.5">
-                {users.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => onLogin({ identifier: u.username, password: u.password })}
-                    className="flex w-full items-center justify-between rounded-xl bg-white/10 px-3 py-2 text-start transition hover:bg-white/20"
-                  >
-                    <span className="text-xs font-medium text-white">{u.fullName}</span>
-                    <span className="text-mono text-[11px] text-wood-blonde/90">
-                      {u.username} / {u.password}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   )
 }

@@ -10,6 +10,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    // Fixed port + auto-open the default browser when the app is ready.
+    port: 5177,
+    open: true,
+  },
   build: {
     chunkSizeWarningLimit: 1200,
     rollupOptions: {

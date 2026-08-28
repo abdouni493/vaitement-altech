@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Product, SizeCategory, SizeStock } from '@/types'
 import { uid, sumSizes, compareSizes } from '@/utils/helpers'
 import {
@@ -9,6 +10,7 @@ import {
   INITIAL_COLORS,
   INITIAL_MATERIALS,
 } from '@/data/seedData'
+import { idbStorage, onRehydrate, storeKey } from './persist'
 
 interface ProductState {
   products: Product[]
@@ -53,7 +55,9 @@ const applyToSize = (sizes: SizeStock[], size: string, delta: number): SizeStock
   return next.sort((a, b) => compareSizes(a.size, b.size))
 }
 
-export const useProductStore = create<ProductState>()((set) => ({
+export const useProductStore = create<ProductState>()(
+  persist(
+    (set) => ({
   products: INITIAL_PRODUCTS,
   brands: INITIAL_BRANDS,
   categories: INITIAL_CATEGORIES,
@@ -120,4 +124,19 @@ export const useProductStore = create<ProductState>()((set) => ({
         },
       }
     }),
-}))
+    }),
+    {
+      name: storeKey('products'),
+      storage: idbStorage(),
+      partialize: (s) => ({
+        products: s.products,
+        brands: s.brands,
+        categories: s.categories,
+        colors: s.colors,
+        materials: s.materials,
+        sizeScales: s.sizeScales,
+      }),
+      onRehydrateStorage: onRehydrate('products'),
+    },
+  ),
+)

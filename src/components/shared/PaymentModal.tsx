@@ -98,7 +98,7 @@ export const PaymentModal = ({ open, onClose, total, paid, payments, onPay }: Pa
         </div>
         <Input label={t('description')} value={note} onChange={(e) => setNote(e.target.value)} />
 
-        <div className="flex items-center justify-between rounded-xl bg-wood-btn px-4 py-3 text-white">
+        <div className="flex items-center justify-between rounded-xl bg-wood-btn px-4 py-3 text-accentfg">
           <span className="flex items-center gap-2 font-medium"><CreditCard size={18} />{t('remaining')}</span>
           <span className="text-mono text-lg font-bold">{formatMoney(newRest)}</span>
         </div>

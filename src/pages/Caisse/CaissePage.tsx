@@ -345,7 +345,7 @@ export const CaissePage = () => {
               key={p.key}
               onClick={() => setPeriod(p.key)}
               className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
-                period === p.key ? 'bg-wood-btn text-white shadow-wood' : 'text-wood-medium hover:bg-wood-cream'
+                period === p.key ? 'bg-wood-btn text-accentfg shadow-wood' : 'text-wood-medium hover:bg-wood-cream'
               }`}
             >
               {p.label}
@@ -605,7 +605,7 @@ export const CaissePage = () => {
                 key={o.k}
                 onClick={() => setMoveFilter(o.k)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  moveFilter === o.k ? 'bg-wood-btn text-white shadow-wood' : 'text-wood-medium hover:bg-wood-cream'
+                  moveFilter === o.k ? 'bg-wood-btn text-accentfg shadow-wood' : 'text-wood-medium hover:bg-wood-cream'
                 }`}
               >
                 {o.l}

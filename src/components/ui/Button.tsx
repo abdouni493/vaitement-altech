@@ -9,19 +9,24 @@ interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'ref'> {
   size?: Size
 }
 
+/**
+ * Square, high-contrast slabs. `primary` is the ink block that inverts in dark
+ * mode; `outline` is its hairline counterpart, which fills on hover — the
+ * inversion is the whole hover language of the design.
+ */
 const variants: Record<Variant, string> = {
-  primary: 'bg-wood-btn text-white shadow-wood hover:shadow-wood-lg',
-  gold: 'bg-gold-shine text-wood-dark font-semibold shadow-gold',
-  ghost: 'bg-transparent text-wood-medium hover:bg-wood-light/10',
-  danger: 'bg-gradient-to-br from-terracotta to-red-700 text-white shadow-wood',
-  outline: 'bg-white/70 text-wood-medium border border-wood-light/40 hover:bg-wood-cream',
-  sage: 'bg-gradient-to-br from-sage to-green-700 text-white shadow-wood',
+  primary: 'bg-wood-btn text-accentfg hover:opacity-85',
+  gold: 'border border-wood-warm bg-transparent text-wood-warm hover:bg-wood-btn hover:text-accentfg',
+  ghost: 'bg-transparent text-wood-medium hover:bg-wood-cream hover:text-wood-dark',
+  danger: 'bg-terracotta text-white hover:opacity-85',
+  outline: 'border border-wood-light bg-wood-white text-wood-dark hover:border-wood-warm hover:bg-wood-cream',
+  sage: 'bg-sage text-white hover:opacity-85',
 }
 
 const sizes: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs gap-1.5',
-  md: 'px-4 py-2.5 text-sm gap-2',
-  lg: 'px-6 py-3 text-base gap-2.5',
+  sm: 'px-3 py-1.5 text-[11px] gap-1.5 tracking-wide',
+  md: 'px-4 py-2.5 text-xs gap-2 tracking-wide',
+  lg: 'px-7 py-3.5 text-sm gap-2.5 tracking-wide',
   icon: 'p-2',
 }
 
@@ -34,11 +39,13 @@ export const Button = ({
   ...props
 }: ButtonProps) => (
   <motion.button
-    whileHover={disabled ? undefined : { scale: 1.03 }}
-    whileTap={disabled ? undefined : { scale: 0.97 }}
+    whileHover={disabled ? undefined : { y: -1 }}
+    whileTap={disabled ? undefined : { scale: 0.98 }}
+    transition={{ duration: 0.18, ease: 'easeOut' }}
     disabled={disabled}
     className={clsx(
-      'inline-flex items-center justify-center rounded-xl font-medium transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-50',
+      'inline-flex cursor-pointer items-center justify-center font-semibold uppercase outline-none transition-[opacity,background-color,border-color,color] duration-200 focus-visible:ring-2 focus-visible:ring-wood-warm/50 focus-visible:ring-offset-2 focus-visible:ring-offset-wood-white disabled:cursor-not-allowed disabled:opacity-40',
+      size === 'icon' ? 'normal-case' : '',
       variants[variant],
       sizes[size],
       className,

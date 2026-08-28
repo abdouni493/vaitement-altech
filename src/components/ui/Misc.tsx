@@ -20,8 +20,12 @@ export const PageHeader = ({
     className="mb-6 flex flex-wrap items-end justify-between gap-4"
   >
     <div className="min-w-0">
-      <h1 className="text-display text-2xl font-bold text-wood-dark sm:text-3xl">{title}</h1>
-      {subtitle && <p className="mt-1 text-sm text-wood-medium">{subtitle}</p>}
+      <h1 className="text-hero text-[clamp(1.6rem,3.6vw,2.6rem)] text-wood-dark">{title}</h1>
+      {subtitle && (
+        <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-wood-medium">
+          {subtitle}
+        </p>
+      )}
     </div>
     {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
   </motion.div>
@@ -64,13 +68,15 @@ export const EmptyState = ({
   <motion.div
     initial={{ opacity: 0, scale: 0.95 }}
     animate={{ opacity: 1, scale: 1 }}
-    className="card-wood flex flex-col items-center justify-center gap-3 rounded-2xl px-6 py-16 text-center"
+    className="flex flex-col items-center justify-center gap-3 border border-dashed border-wood-light px-6 py-20 text-center"
   >
-    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-wood-cream text-wood-light">
-      {icon ?? <PackageOpen size={40} />}
+    <div className="flex h-16 w-16 items-center justify-center bg-wood-cream text-wood-medium/50">
+      {icon ?? <PackageOpen size={32} />}
     </div>
-    <h3 className="text-display text-xl font-bold text-wood-dark">{title}</h3>
-    {hint && <p className="max-w-sm text-sm text-wood-medium">{hint}</p>}
+    <h3 className="text-display text-base font-black uppercase tracking-wide text-wood-dark">
+      {title}
+    </h3>
+    {hint && <p className="max-w-sm text-xs leading-relaxed text-wood-medium">{hint}</p>}
     {action && <div className="mt-2">{action}</div>}
   </motion.div>
 )
@@ -84,14 +90,14 @@ export const ViewToggle = ({
   onChange: (v: 'cards' | 'table') => void
   labels: { cards: string; table: string }
 }) => (
-  <div className="inline-flex rounded-xl border border-wood-light/40 bg-white/70 p-1">
+  <div className="inline-flex border border-wood-light bg-wood-white">
     {(['cards', 'table'] as const).map((v) => (
       <button
         key={v}
         onClick={() => onChange(v)}
         className={clsx(
-          'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-          view === v ? 'bg-wood-btn text-white shadow-wood' : 'text-wood-medium hover:bg-wood-cream',
+          'px-3.5 py-2 text-[10px] font-bold uppercase tracking-wide transition',
+          view === v ? 'bg-wood-btn text-accentfg' : 'text-wood-medium hover:bg-wood-cream',
         )}
       >
         {labels[v]}
@@ -103,15 +109,12 @@ export const ViewToggle = ({
 export const ProgressBar = ({ value, max, danger }: { value: number; max: number; danger?: boolean }) => {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-wood-cream">
+    <div className="h-1.5 w-full overflow-hidden bg-wood-cream">
       <motion.div
         initial={{ width: 0 }}
         animate={{ width: `${pct}%` }}
         transition={{ duration: 0.8, ease: 'easeOut' }}
-        className={clsx(
-          'h-full rounded-full',
-          danger ? 'bg-gradient-to-r from-terracotta to-red-600' : 'bg-gradient-to-r from-sage to-green-600',
-        )}
+        className={clsx('h-full', danger ? 'bg-terracotta' : 'bg-wood-dark')}
       />
     </div>
   )

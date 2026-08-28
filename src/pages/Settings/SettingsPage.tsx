@@ -14,7 +14,7 @@ import { fadeUp, staggerContainer } from '@/utils/animations'
 const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
   <motion.div variants={fadeUp} className="card-wood rounded-2xl p-5">
     <div className="mb-4 flex items-center gap-2">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-wood-btn text-white">{icon}</div>
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-wood-btn text-accentfg">{icon}</div>
       <h3 className="text-display text-lg font-bold text-wood-dark">{title}</h3>
     </div>
     {children}

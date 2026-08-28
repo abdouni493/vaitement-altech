@@ -1,9 +1,11 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LogOut, Shirt, ChevronLeft, ChevronRight } from 'lucide-react'
-import { NAV_ITEMS } from './navConfig'
+import { LogOut, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { NAV_ITEMS, type NavItem } from './navConfig'
 import { useTranslation } from '@/i18n/useTranslation'
 import { useAuthStore } from '@/store/useAuthStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import { useOrderStore, pendingCount } from '@/store/useOrderStore'
 import { moduleEnabled } from '@/utils/helpers'
 import { clsx } from '@/utils/clsx'
 
@@ -17,37 +19,115 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
   const navigate = useNavigate()
   const currentUser = useAuthStore((s) => s.currentUser)
   const logout = useAuthStore((s) => s.logout)
+  const settings = useSettingsStore((s) => s.settings)
+  const orders = useOrderStore((s) => s.orders)
+
+  /** New online orders surface here so they are never missed on another page. */
+  const pending = pendingCount(orders)
 
   const items = NAV_ITEMS.filter((item) => moduleEnabled(currentUser?.permissions, item.key))
+  const store = items.filter((i) => i.group === 'store')
+  const online = items.filter((i) => i.group === 'online')
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const CollapseIcon = collapsed ? (isRTL ? ChevronLeft : ChevronRight) : isRTL ? ChevronRight : ChevronLeft
+  const CollapseIcon = collapsed
+    ? isRTL
+      ? ChevronLeft
+      : ChevronRight
+    : isRTL
+      ? ChevronRight
+      : ChevronLeft
+
+  const renderItem = (item: NavItem) => {
+    const badge = item.key === 'weborders' ? pending : 0
+    return (
+      <NavLink key={item.key} to={item.path} title={collapsed ? t(item.labelKey) : undefined}>
+        {({ isActive }) => (
+          <div
+            className={clsx(
+              'group relative flex items-center gap-3 px-3 py-2.5 transition-colors duration-200',
+              isActive ? 'bg-white/10' : 'hover:bg-white/[0.06]',
+            )}
+          >
+            {isActive && (
+              <motion.span
+                layoutId="activeBar"
+                transition={{ type: 'spring', damping: 30, stiffness: 380 }}
+                className="absolute inset-y-0 start-0 w-[3px] bg-white"
+              />
+            )}
+            <span className="relative shrink-0">
+              <item.icon
+                size={19}
+                strokeWidth={isActive ? 2.2 : 1.7}
+                className={isActive ? 'text-white' : 'text-white/55 group-hover:text-white/85'}
+              />
+              {/* Collapsed rail keeps the alert as a dot on the icon itself. */}
+              {badge > 0 && collapsed && (
+                <span className="absolute -end-1.5 -top-1.5 h-2.5 w-2.5 animate-pulse-glow rounded-full bg-terracotta ring-2 ring-black" />
+              )}
+            </span>
+            <AnimatePresence initial={false}>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  className={clsx(
+                    'truncate text-[11px] font-bold uppercase tracking-wide',
+                    isActive ? 'text-white' : 'text-white/60 group-hover:text-white/90',
+                  )}
+                >
+                  {t(item.labelKey)}
+                </motion.span>
+              )}
+            </AnimatePresence>
+            {badge > 0 && !collapsed && (
+              <span className="text-mono ms-auto flex h-5 min-w-5 items-center justify-center bg-terracotta px-1.5 text-[10px] font-bold leading-none text-white">
+                {badge}
+              </span>
+            )}
+          </div>
+        )}
+      </NavLink>
+    )
+  }
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 76 : 256 }}
-      transition={{ type: 'spring', damping: 26, stiffness: 240 }}
-      className="wood-grain relative z-30 flex h-screen flex-col bg-wood-sidebar shadow-wood-lg"
+      animate={{ width: collapsed ? 72 : 236 }}
+      transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+      className="wood-grain relative z-30 flex h-screen flex-col bg-wood-sidebar"
     >
       {/* Brand */}
-      <div className="flex items-center gap-3 px-4 py-5">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-shine bg-[length:200%_200%] text-white shadow-rose animate-gradient-shift">
-          <Shirt size={24} />
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-white">
+          {settings.logo ? (
+            <img src={settings.logo} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-display text-lg font-black leading-none text-black">
+              {(settings.name || 'B').slice(0, 1).toUpperCase()}
+            </span>
+          )}
         </div>
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.div
-              initial={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className="overflow-hidden"
+              exit={{ opacity: 0, x: -8 }}
+              className="min-w-0 overflow-hidden"
             >
-              <h1 className="text-display text-xl font-bold leading-none text-white">{t('appName')}</h1>
-              <p className="mt-0.5 truncate text-[10px] text-wood-blonde/80">{t('appSubtitle')}</p>
+              <h1 className="text-display truncate text-base font-black uppercase leading-none tracking-tightest text-white">
+                {settings.name || t('appName')}
+              </h1>
+              <p className="mt-1 truncate text-[9px] font-semibold uppercase tracking-widest text-white/40">
+                {t('appSubtitle')}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -57,67 +137,64 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       <button
         onClick={onToggle}
         aria-label="toggle sidebar"
-        className="absolute -end-3 top-16 z-40 flex h-6 w-6 items-center justify-center rounded-full border border-wood-light/40 bg-wood-cream text-wood-dark shadow-wood transition hover:bg-white"
+        className="absolute -end-3 top-[70px] z-40 flex h-6 w-6 items-center justify-center border border-wood-light bg-wood-white text-wood-dark transition hover:bg-wood-cream"
       >
-        <CollapseIcon size={14} />
+        <CollapseIcon size={13} />
       </button>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-2">
-        {items.map((item) => (
-          <NavLink key={item.key} to={item.path} title={collapsed ? t(item.labelKey) : undefined}>
-            {({ isActive }) => (
-              <motion.div
-                whileHover={{ x: isRTL ? -6 : 6 }}
-                className={clsx(
-                  'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-                  isActive
-                    ? 'bg-white/15 shadow-wood-inset ring-1 ring-white/20 backdrop-blur-sm'
-                    : 'hover:bg-white/10',
-                )}
-              >
-                {isActive && (
-                  <motion.span
-                    layoutId="activeBar"
-                    className="absolute inset-y-1.5 start-0 w-1 rounded-full bg-gradient-to-b from-wood-light to-pink-300"
-                  />
-                )}
-                <item.icon size={20} style={{ color: item.color }} className="shrink-0" />
-                <AnimatePresence>
-                  {!collapsed && (
-                    <motion.span
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -8 }}
-                      className={clsx(
-                        'truncate text-sm font-medium',
-                        isActive ? 'text-white' : 'text-wood-cream/90',
-                      )}
-                    >
-                      {t(item.labelKey)}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-                {isActive && !collapsed && (
-                  <motion.div layoutId="activeDot" className="ms-auto h-2 w-2 rounded-full bg-gold-light" />
-                )}
-              </motion.div>
-            )}
-          </NavLink>
-        ))}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3">
+        <div className="space-y-0.5">{store.slice(0, 10).map(renderItem)}</div>
+
+        {online.length > 0 && (
+          <>
+            <div className="my-3 flex items-center gap-2 px-4">
+              <span className="h-px flex-1 bg-white/12" />
+              {!collapsed && (
+                <span className="text-[8px] font-bold uppercase tracking-widest text-white/30">
+                  {t('website')}
+                </span>
+              )}
+              <span className="h-px flex-1 bg-white/12" />
+            </div>
+            <div className="space-y-0.5">{online.map(renderItem)}</div>
+          </>
+        )}
+
+        {store.length > 10 && (
+          <>
+            <div className="my-3 px-4">
+              <span className="block h-px bg-white/12" />
+            </div>
+            <div className="space-y-0.5">{store.slice(10).map(renderItem)}</div>
+          </>
+        )}
       </nav>
 
-      {/* Logout */}
-      <div className="border-t border-white/10 p-3">
-        <motion.button
-          whileHover={{ x: isRTL ? -6 : 6 }}
+      {/* Storefront shortcut + logout */}
+      <div className="border-t border-white/10 p-2">
+        <a
+          href="/shop"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={collapsed ? t('visitWebsite') : undefined}
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          <ExternalLink size={18} strokeWidth={1.7} className="shrink-0" />
+          {!collapsed && (
+            <span className="text-[11px] font-bold uppercase tracking-wide">{t('visitWebsite')}</span>
+          )}
+        </a>
+        <button
           onClick={handleLogout}
           title={collapsed ? t('logout') : undefined}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-wood-cream/90 transition hover:bg-terracotta/30"
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-white/60 transition hover:bg-terracotta/20 hover:text-white"
         >
-          <LogOut size={20} className="shrink-0 text-terracotta" />
-          {!collapsed && <span className="text-sm font-medium">{t('logout')}</span>}
-        </motion.button>
+          <LogOut size={18} strokeWidth={1.7} className="shrink-0" />
+          {!collapsed && (
+            <span className="text-[11px] font-bold uppercase tracking-wide">{t('logout')}</span>
+          )}
+        </button>
       </div>
     </motion.aside>
   )

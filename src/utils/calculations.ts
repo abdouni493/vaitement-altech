@@ -6,6 +6,8 @@ import type {
   Product,
   CaisseTransaction,
   SizeCategory,
+  WebOrder,
+  WebOrderStatus,
 } from '@/types'
 import { round2, monthKey } from './helpers'
 import {
@@ -638,4 +640,188 @@ export const computeSalary = (worker: Worker, period: string) => {
   const advances = round2(worker.advances.filter((a) => !a.deducted).reduce((s, a) => s + a.amount, 0))
   const toPay = round2(Math.max(0, base - absences - advances))
   return { base, absences, advances, toPay }
+}
+
+// ----------------------------------------------------------------------------
+// Website channel — the online store's own analytics
+// ----------------------------------------------------------------------------
+
+export interface WebChannelStats {
+  /** Orders placed in the period, whatever became of them. */
+  placed: number
+  pending: number
+  accepted: number
+  delivered: number
+  completed: number
+  canceled: number
+  returned: number
+  /** Billed value of every order placed in the period. */
+  grossValue: number
+  /** Value of orders that reached `completed` — the money actually collected. */
+  netRevenue: number
+  /** Carrier fees inside `netRevenue`. */
+  deliveryCollected: number
+  /** Units that left the boutique through the website. */
+  unitsSold: number
+  /** netRevenue ÷ completed. */
+  avgOrderValue: number
+  /** completed ÷ placed, as a percentage. */
+  fulfillmentRate: number
+  cancelRate: number
+  returnRate: number
+}
+
+const orderInRange = (o: WebOrder, start: Date, end: Date): boolean =>
+  isWithinInterval(new Date(o.createdAt), { start, end })
+
+/** Aggregate the online channel over a date range. */
+export const webChannelStats = (
+  orders: WebOrder[],
+  start: Date,
+  end: Date,
+): WebChannelStats => {
+  const period = orders.filter((o) => orderInRange(o, start, end))
+  const by = (s: WebOrderStatus) => period.filter((o) => o.status === s)
+
+  const completed = by('completed')
+  const netRevenue = round2(completed.reduce((s, o) => s + o.total, 0))
+  const placed = period.length
+
+  // Only fulfilled orders moved stock, so only they count units sold.
+  const unitsSold = completed.reduce(
+    (n, o) => n + o.lines.reduce((k, l) => k + l.quantity, 0),
+    0,
+  )
+
+  const pct = (n: number) => (placed > 0 ? round2((n / placed) * 100) : 0)
+
+  return {
+    placed,
+    pending: by('pending').length,
+    accepted: by('accepted').length,
+    delivered: by('delivered').length,
+    completed: completed.length,
+    canceled: by('canceled').length,
+    returned: by('returned').length,
+    grossValue: round2(period.reduce((s, o) => s + o.total, 0)),
+    netRevenue,
+    deliveryCollected: round2(completed.reduce((s, o) => s + o.deliveryPrice, 0)),
+    unitsSold,
+    avgOrderValue: completed.length > 0 ? round2(netRevenue / completed.length) : 0,
+    fulfillmentRate: pct(completed.length),
+    cancelRate: pct(by('canceled').length),
+    returnRate: pct(by('returned').length),
+  }
+}
+
+export interface WilayaAgg {
+  wilaya: string
+  orders: number
+  revenue: number
+  units: number
+}
+
+/** Where the online orders come from, best-performing wilaya first. */
+export const webOrdersByWilaya = (
+  orders: WebOrder[],
+  start: Date,
+  end: Date,
+): WilayaAgg[] => {
+  const map = new Map<string, WilayaAgg>()
+  orders
+    .filter((o) => orderInRange(o, start, end) && o.status !== 'canceled')
+    .forEach((o) => {
+      const key = `${o.wilayaCode} — ${o.wilaya}`
+      const cur = map.get(key) ?? { wilaya: key, orders: 0, revenue: 0, units: 0 }
+      cur.orders += 1
+      cur.revenue = round2(cur.revenue + o.total)
+      cur.units += o.lines.reduce((n, l) => n + l.quantity, 0)
+      map.set(key, cur)
+    })
+  return [...map.values()].sort((a, b) => b.revenue - a.revenue)
+}
+
+export interface WebProductAgg {
+  productId: string
+  name: string
+  quantity: number
+  revenue: number
+}
+
+/** The articles the website actually shifts. */
+export const webTopProducts = (
+  orders: WebOrder[],
+  start: Date,
+  end: Date,
+  limit = 10,
+): WebProductAgg[] => {
+  const map = new Map<string, WebProductAgg>()
+  orders
+    .filter((o) => orderInRange(o, start, end) && o.status !== 'canceled')
+    .forEach((o) =>
+      o.lines.forEach((l) => {
+        const cur =
+          map.get(l.productId) ?? { productId: l.productId, name: l.productName, quantity: 0, revenue: 0 }
+        cur.quantity += l.quantity
+        cur.revenue = round2(cur.revenue + l.quantity * l.unitPrice)
+        map.set(l.productId, cur)
+      }),
+    )
+  return [...map.values()].sort((a, b) => b.quantity - a.quantity).slice(0, limit)
+}
+
+export interface OfferPerformance {
+  offerId: string
+  title: string
+  orders: number
+  units: number
+  revenue: number
+}
+
+/** How each campaign converted, measured on the orders that quoted it. */
+export const offerPerformance = (
+  orders: WebOrder[],
+  start: Date,
+  end: Date,
+): OfferPerformance[] => {
+  const map = new Map<string, OfferPerformance>()
+  orders
+    .filter((o) => orderInRange(o, start, end) && o.status !== 'canceled')
+    .forEach((o) => {
+      // One order may quote several campaigns; each is credited once for it.
+      const seen = new Set<string>()
+      o.lines.forEach((l) => {
+        if (!l.offerId) return
+        const cur =
+          map.get(l.offerId) ??
+          { offerId: l.offerId, title: l.offerTitle ?? l.offerId, orders: 0, units: 0, revenue: 0 }
+        if (!seen.has(l.offerId)) {
+          cur.orders += 1
+          seen.add(l.offerId)
+        }
+        cur.units += l.quantity
+        cur.revenue = round2(cur.revenue + l.quantity * l.unitPrice)
+        map.set(l.offerId, cur)
+      })
+    })
+  return [...map.values()].sort((a, b) => b.revenue - a.revenue)
+}
+
+/** Day-by-day online revenue for the period's trend line. */
+export const webDailyRevenue = (
+  orders: WebOrder[],
+  start: Date,
+  end: Date,
+): { day: string; orders: number; revenue: number }[] => {
+  const map = new Map<string, { day: string; orders: number; revenue: number }>()
+  orders
+    .filter((o) => orderInRange(o, start, end))
+    .forEach((o) => {
+      const day = format(new Date(o.createdAt), 'dd/MM')
+      const cur = map.get(day) ?? { day, orders: 0, revenue: 0 }
+      cur.orders += 1
+      if (o.status === 'completed') cur.revenue = round2(cur.revenue + o.total)
+      map.set(day, cur)
+    })
+  return [...map.values()]
 }

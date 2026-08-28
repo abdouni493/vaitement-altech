@@ -35,6 +35,8 @@ export type ModuleKey =
   | 'caisse'
   | 'reports'
   | 'settings'
+  | 'website'
+  | 'weborders'
 
 export type ActionKey = 'view' | 'create' | 'edit' | 'delete' | 'print' | 'pay'
 
@@ -105,6 +107,12 @@ export interface Product {
   gender: Gender
   season: Season
   collection: string
+
+  /**
+   * Photos shown on the storefront, as data URLs. The first is the cover.
+   * Optional: articles created before the storefront existed have none.
+   */
+  images?: string[]
 
   createdAt: string
 }
@@ -297,4 +305,214 @@ export interface StoreSettings {
   article: string
   rc: string
   currency: string
+}
+
+// ============================================================================
+// Website — the public storefront and everything the owner configures for it
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Catalogue exposure
+// ----------------------------------------------------------------------------
+
+/**
+ * What the storefront adds on top of a stock article. Absent means "never
+ * touched", which the selectors read as *published* — a newly received article
+ * appears online without extra work, and the owner hides it explicitly.
+ */
+export interface WebProductMeta {
+  productId: string
+  hidden: boolean
+  /** Optional online-only price. Falls back to the article's `salePrice`. */
+  webPrice?: number
+  /** Sort weight on the shop grid — higher floats to the top. */
+  featured?: boolean
+  updatedAt: string
+}
+
+// ----------------------------------------------------------------------------
+// Special offers
+// ----------------------------------------------------------------------------
+
+/** One article inside an offer, with the discount priced per unit. */
+export interface OfferLine {
+  productId: string
+  productName: string
+  /** Units of this article included in the offer. */
+  quantity: number
+  /** The catalogue price at the time the line was added. */
+  originalPrice: number
+  /** The price the customer pays instead. */
+  offerPrice: number
+}
+
+export interface SpecialOffer {
+  id: string
+  title: string
+  description: string
+  /** Cover image as a data URL. */
+  image: string
+  lines: OfferLine[]
+  /** Sum of `originalPrice * quantity`. */
+  originalTotal: number
+  /** Sum of `offerPrice * quantity`. */
+  offerTotal: number
+  /** originalTotal − offerTotal. */
+  discountAmount: number
+  /** The same saving as a percentage of `originalTotal`. */
+  discountPercent: number
+  active: boolean
+  /** ISO dates bounding the campaign; the storefront counts down to `endDate`. */
+  startDate: string
+  endDate: string
+  createdAt: string
+}
+
+// ----------------------------------------------------------------------------
+// Delivery
+// ----------------------------------------------------------------------------
+
+export type DeliveryMode = 'home' | 'desk'
+
+/** The tariff for one commune, both ways of receiving the parcel. */
+export interface CommunePrice {
+  /** `${wilayaCode}::${communeName}` — unique across the country. */
+  key: string
+  wilayaCode: string
+  commune: string
+  /** Delivered to the customer's address. */
+  home: number
+  /** Collected from the carrier's local desk (stopdesk). */
+  desk: number
+  /** Only priced communes are offered at checkout. */
+  enabled: boolean
+}
+
+export interface DeliveryCompany {
+  id: string
+  name: string
+  phone: string
+  /** Logo as a data URL. */
+  logo: string
+  notes: string
+  active: boolean
+  /** Tariffs keyed by `${wilayaCode}::${communeName}`. */
+  prices: Record<string, CommunePrice>
+  createdAt: string
+}
+
+// ----------------------------------------------------------------------------
+// Contacts & storefront identity
+// ----------------------------------------------------------------------------
+
+export interface ContactLinks {
+  facebook: string
+  instagram: string
+  tiktok: string
+  snapchat: string
+  whatsapp: string
+  phone: string
+  phone2: string
+  email: string
+  mapsUrl: string
+}
+
+export interface WebsiteSettings {
+  /** Overrides the app favicon when set (data URL). */
+  favicon: string
+  /** Full-bleed image behind the landing hero (data URL). */
+  heroImage: string
+  /** Marketing copy shown under the store name on the landing page. */
+  description: string
+  /** Short line above the headline, e.g. "Nouvelle collection". */
+  tagline: string
+  /** Free delivery above this order total. 0 disables the rule. */
+  freeShippingFrom: number
+}
+
+// ----------------------------------------------------------------------------
+// Website orders
+// ----------------------------------------------------------------------------
+
+/**
+ * The lifecycle of an online order.
+ *
+ *   pending ──accept──▶ accepted ──deliver──▶ delivered ──cash──▶ completed
+ *      │                    │                     │
+ *      └──────cancel────────┘                     └──return──▶ returned
+ *
+ * Stock leaves the boutique on `delivered` and comes back on `returned`; the
+ * money reaches the caisse on `completed`.
+ */
+export type WebOrderStatus =
+  | 'pending'
+  | 'accepted'
+  | 'delivered'
+  | 'completed'
+  | 'canceled'
+  | 'returned'
+
+export const WEB_ORDER_STATUSES: WebOrderStatus[] = [
+  'pending',
+  'accepted',
+  'delivered',
+  'completed',
+  'returned',
+  'canceled',
+]
+
+export interface WebOrderLine {
+  productId: string
+  productName: string
+  /** Size ordered. Empty for articles without a size scale. */
+  size: string
+  quantity: number
+  unitPrice: number
+  /** Set when the line came from a special offer, for traceability. */
+  offerId?: string
+  offerTitle?: string
+  image?: string
+}
+
+export interface WebOrder {
+  id: string
+  /** Human reference shown to the customer, e.g. "WEB-000042". */
+  reference: string
+  customerName: string
+  phone: string
+  wilayaCode: string
+  wilaya: string
+  commune: string
+  address: string
+  deliveryMode: DeliveryMode
+  deliveryCompanyId: string | null
+  deliveryCompanyName: string
+  deliveryPrice: number
+  lines: WebOrderLine[]
+  subtotal: number
+  total: number
+  status: WebOrderStatus
+  note: string
+  /** Appended on every status change, newest last. */
+  history: { status: WebOrderStatus; at: string; note?: string }[]
+  /** Set once the money has been booked into the caisse, so it never doubles. */
+  cashedAt?: string
+  /** Set while the stock is out of the boutique, so it never decrements twice. */
+  stockAppliedAt?: string
+  createdAt: string
+}
+
+// ----------------------------------------------------------------------------
+// Storefront cart (browser-local, never leaves the customer's device)
+// ----------------------------------------------------------------------------
+
+export interface CartItem {
+  productId: string
+  productName: string
+  size: string
+  quantity: number
+  unitPrice: number
+  image?: string
+  offerId?: string
+  offerTitle?: string
 }

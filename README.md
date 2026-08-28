@@ -1,70 +1,138 @@
-# Atelier Mode — Gestion de Boutique de Prêt-à-Porter
+# Boutique — gestion & boutique en ligne
 
-Application web complète de gestion d'une boutique de vêtements (prêt-à-porter, chaussures, accessoires), construite en **React 18 + TypeScript + Vite**. L'application fonctionne **entièrement en mémoire** : aucune base de données, aucun `localStorage`. Chaque écran est alimenté au démarrage par un jeu de données constant riche (`src/data/seedData.ts`), idéal pour la démonstration et les tests. Interface bilingue **Français / Arabe (RTL)**, palette « encre · laiton · camel sur pierre chaude », animations Framer Motion partout.
+Application de gestion pour une boutique de prêt-à-porter, doublée d'une
+boutique en ligne publique. Un seul projet React, deux faces : le back-office
+(`/dashboard`, …) et la vitrine (`/shop`).
 
-## Démarrage
+Design monochrome noir/blanc, typographie display en capitales, angles vifs,
+mode sombre complet. Interface bilingue **français / arabe** avec RTL.
+
+---
+
+## Démarrer
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev        # http://localhost:5177
 ```
 
-Autres scripts :
+Autres scripts : `npm run build`, `npm run preview`, `npm run typecheck`.
 
-```bash
-npm run build      # build de production (tsc + vite)
-npm run preview    # prévisualiser le build
-npm run typecheck  # vérification des types
+Au premier lancement, la page de connexion propose **Créer un compte
+administrateur**. Le bouton disparaît définitivement dès que ce compte existe.
+
+---
+
+## Le back-office
+
+| Module | Ce qu'il fait |
+|--------|---------------|
+| Tableau de bord | Chiffres du jour et du mois, alertes |
+| Gestion de stock | Articles, tailles, codes-barres, photos |
+| Achats | Réception fournisseur, paiements échelonnés |
+| Point de vente | Caisse comptoir |
+| Ventes | Registre des ventes, encaissements |
+| Clients / Fournisseurs | Fiches et soldes |
+| Employés | Fiches, salaires, avances, absences, **permissions** |
+| Dépenses / Caisse | Trésorerie |
+| **Site Web** | Pilotage complet de la boutique en ligne (5 onglets) |
+| **Commandes Web** | Traitement des commandes du site |
+| Rapports | Analyse boutique **et** canal en ligne |
+| Paramètres | Identité du magasin, sauvegarde / restauration |
+
+### Site Web — les cinq onglets
+
+1. **Articles en ligne** — chaque article du stock en carte : publier / masquer,
+   copier le lien de commande, voir la fiche, modifier (même formulaire que la
+   gestion de stock, photos comprises).
+2. **Offres spéciales** — recherche multi-articles, quantité et nouveau prix par
+   article, remise calculée en montant **et** en pourcentage, titre,
+   description, visuel, période de validité, activation. Les offres créées
+   s'affichent en cartes avec compte à rebours.
+3. **Livraison** — sociétés de livraison, puis grille tarifaire couvrant les
+   **58 wilayas et 1 541 communes** : prix domicile et stop-desk par commune,
+   avec un raccourci « appliquer à toutes les communes de la wilaya ».
+4. **Contacts** — Facebook, Instagram, TikTok, Snapchat, WhatsApp, deux
+   téléphones, e-mail, lien Google Maps.
+5. **Paramètres du site** — favicon, image de fond de la page d'accueil,
+   accroche, description, seuil de livraison offerte, avec aperçu en direct.
+
+### Commandes Web — le cycle de vie
+
+```
+en attente ──accepter──▶ acceptée ──livrer──▶ livrée ──encaisser──▶ encaissée
+     │                       │                   │
+     └───────annuler─────────┘                   └──retour──▶ retournée
 ```
 
-## Connexion
+- **Livrer** demande la société de livraison, puis **sort les articles du stock**.
+- **Retour** les **remet en stock**.
+- **Encaisser** demande confirmation puis **enregistre le montant dans la caisse**.
+- Une commande annulée peut être **réactivée**.
 
-- **Accès Démo Admin** — l'écran de connexion affiche les comptes de démonstration ; un clic suffit pour se connecter.
-- Identifiants démo : `admin` / `demo2024` (ou `admin@atelier-mode.com`).
-- Compte vendeuse : `yasmine` / `yasmine123` (permissions restreintes).
-- Vous pouvez aussi créer un compte Admin depuis l'écran de connexion.
+Filtres par statut avec compteurs, recherche par nom ou téléphone, et un badge
+d'alerte sur la barre latérale pour les commandes en attente.
 
-> ℹ️ Les données vivant en mémoire, un **rechargement complet de la page réinitialise l'état** et renvoie à l'écran de connexion — c'est le comportement attendu d'un mode démo sans base de données. La navigation dans l'application (barre latérale) conserve l'état.
+---
 
-## Modules
+## La boutique en ligne — `/shop`
 
-Dashboard · Gestion de Stock · Achats · Point de Vente (POS) · Ventes · Clients · Fournisseurs · Employés · Dépenses · Caisse · Rapports · Paramètres.
+- **Accueil** — hero plein écran animé (nom, logo, description, image de fond),
+  offres en cours et articles à la une.
+- **Boutique** — grille de cartes compactes : **4 articles par écran sur mobile**,
+  recherche, tri, filtre par catégorie.
+- **Fiche article** — galerie, choix de la taille, quantité, panier ou commande
+  directe, articles similaires.
+- **Offres** — cartes avec **compte à rebours animé** jusqu'à la fin de l'offre.
+- **Panier** — quantités et tailles modifiables.
+- **Commande** — nom, téléphone, wilaya puis commune de cette wilaya. La
+  livraison **à domicile** est présélectionnée avec le nom du transporteur ; le
+  stop-desk reste disponible. Le total se recalcule en direct.
+- **Merci** — page de confirmation animée avec logo, nom, description et
+  récapitulatif complet.
 
-### Tailles (spécifique vêtements)
+---
 
-- Chaque article appartient à une **catégorie de taille** : Lettres (S/M/L), Chiffres (36-48), Chaussures, Enfants, Taille unique ou Sur mesure.
-- À la création d'un article, on **sélectionne les tailles** proposées et on saisit le **stock par taille** ; on peut aussi **créer une nouvelle taille** à la volée (elle devient réutilisable partout).
-- Un article porte également : **couleur**, **matière**, **genre** (femme/homme/enfant/unisexe), **saison** et **collection** — toutes ces listes sont extensibles.
-- Le **POS** demande la taille avant d'ajouter au panier ; l'**achat** réceptionne le stock taille par taille ; la **vente** décrémente la taille exacte.
-- Les **tailles manquantes** (une taille en rupture alors que l'article reste vendable) sont signalées sur la carte de stock, le tableau de bord et la cloche de notifications.
+## Données
 
-### Rapports
+L'application est **locale d'abord** : chaque écran lit et écrit une base
+IndexedDB sur l'appareil, donc la boutique fonctionne sans réseau.
 
-Analyse financière sur la période choisie (raccourcis : ce mois, mois dernier, 30 derniers jours, ce trimestre), **analyse par taille** et **par catégorie de taille** (graphiques à double axe unités/CA), ventes **par genre** et **par saison**, meilleures ventes / rotation lente, marge brute et taux de marge, trésorerie, dettes clients & fournisseurs, alertes de stock. Impression A4 avec en-tête du magasin.
+`supabase/` contient le schéma complet destiné au backend partagé — 36 tables,
+les fonctions du cycle de vie des commandes, la sécurité au niveau des lignes,
+les buckets d'images et les 58 wilayas avec leurs communes. Voir
+[`supabase/README.md`](supabase/README.md) pour l'ordre d'exécution.
 
-Chaque action met à jour l'état global (Zustand) et se reflète immédiatement dans toutes les vues liées.
+L'authentification est déjà branchée : la connexion tente Supabase en premier et
+retombe sur les comptes locaux si le projet est injoignable.
+
+### Configuration
+
+`.env` à la racine :
+
+```
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-public-key>
+```
+
+> La clé `anon` est conçue pour être publiée dans le bundle navigateur ; c'est la
+> sécurité au niveau des lignes qui protège les données, pas le secret de la clé.
+> Ne mettez **jamais** la clé `service_role` ici.
+
+---
+
+## Permissions
+
+L'administrateur coche, pour chaque employé, les modules autorisés et les
+actions permises dans chacun (`voir`, `créer`, `modifier`, `supprimer`,
+`imprimer`, `payer`). La barre latérale, les pages et les boutons d'action se
+plient à cette matrice, et le schéma SQL l'applique une seconde fois côté base
+via `has_permission(module, action)`.
+
+---
 
 ## Stack
 
-React Router v6 · Zustand (en mémoire, sans persistance) · React Hook Form + Zod · Recharts · Framer Motion · date-fns · lucide-react · react-hot-toast · JsBarcode · react-to-print · TailwindCSS.
-
-## Structure
-
-```
-src/
-├── i18n/          traductions FR/AR + hook useTranslation
-├── store/         stores Zustand (auth, products, purchases, sales, ...) — seedés au boot
-├── data/          seedData.ts — jeu de données constant de démonstration
-├── types/         interfaces TypeScript (Product, tailles, ...)
-├── components/    layout (sidebar, header) + ui (icônes, boutons) + shared (barcode, size picker, print)
-├── pages/         une page par module de la sidebar
-└── utils/         calculs financiers & analyses par taille, animations, helpers, export/import
-```
-
-## Notes
-
-- **Sauvegarde / Restauration** : Paramètres → Données (export/import JSON). L'import écrit directement dans les stores en mémoire.
-- **Impression** : factures d'achat / vente (avec colonne Taille) et rapports au format A4 avec en-tête du magasin (NIF/NIS/RC).
-- **Codes-barres** : génération EAN-13 + impression depuis la fiche article.
-- Les données seed sont calculées en dates relatives à aujourd'hui pour que le tableau de bord soit toujours peuplé.
-- Pour repartir des données de démonstration : **rechargez la page**.
+React 18 · TypeScript · Vite · Tailwind CSS · Zustand (+ IndexedDB) ·
+React Router · Framer Motion · Emotion · Recharts · react-hook-form + Zod ·
+Supabase.

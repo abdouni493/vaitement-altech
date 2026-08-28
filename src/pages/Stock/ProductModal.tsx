@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button'
 import { Input, Textarea, Select } from '@/components/ui/Input'
 import { Barcode } from '@/components/shared/BarcodeGenerator'
 import { SizePicker } from '@/components/shared/SizePicker'
+import { ImageGallery } from '@/components/shared/ImageUploader'
 import { useProductStore } from '@/store/useProductStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { generateEAN13 } from '@/utils/helpers'
@@ -152,6 +153,8 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
 
   /** Per-size stock lives outside the zod form — it is a list, not a field. */
   const [sizes, setSizes] = useState<SizeStock[]>([])
+  /** Storefront photos, likewise a list rather than a field. */
+  const [images, setImages] = useState<string[]>([])
 
   const {
     register,
@@ -195,6 +198,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
         collection: product.collection ?? '',
       })
       setSizes(product.sizes)
+      setImages(product.images ?? [])
     } else {
       reset({
         name: presetName ?? '',
@@ -210,6 +214,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
         collection: '',
       })
       setSizes([])
+      setImages([])
     }
   }, [open, product, presetName]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -233,6 +238,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
       category: data.category,
       sizeCategory: data.sizeCategory,
       sizes,
+      images,
       color: data.color,
       material: data.material,
       gender: data.gender as Gender,
@@ -320,6 +326,18 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
           </div>
         </section>
 
+        {/* ── Storefront photos ──────────────────────────────────────────── */}
+        <section className="space-y-3">
+          <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-wood-warm">
+            <IconGarment size={15} />
+            {t('images')}{' '}
+            <span className="font-normal normal-case tracking-normal text-wood-medium">
+              ({t('optional')})
+            </span>
+          </h4>
+          <ImageGallery value={images} onChange={setImages} hint={t('imagesHint')} />
+        </section>
+
         {/* ── Sizes ──────────────────────────────────────────────────────── */}
         <section className="space-y-3">
           <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-wood-warm">
@@ -337,7 +355,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
                   onClick={() => changeSizeCategory(c)}
                   className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
                     sizeCategory === c
-                      ? 'border-wood-warm bg-wood-btn text-white shadow-gold'
+                      ? 'border-wood-warm bg-wood-btn text-accentfg shadow-gold'
                       : 'border-wood-light bg-white text-wood-medium hover:border-wood-warm hover:text-wood-warm'
                   }`}
                 >

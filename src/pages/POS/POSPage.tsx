@@ -472,7 +472,7 @@ export const POSPage = () => {
                   className="input-wood py-1.5"
                 />
               )}
-              <div className="flex items-center justify-between rounded-xl bg-wood-btn px-3 py-2 text-white">
+              <div className="flex items-center justify-between rounded-xl bg-wood-btn px-3 py-2 text-accentfg">
                 <span className="font-medium">{t('toPay')}</span>
                 <span className="text-mono text-lg font-bold">{formatMoney(total)}</span>
               </div>
