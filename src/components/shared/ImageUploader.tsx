@@ -16,14 +16,12 @@ import { clsx } from '@/utils/clsx'
 // the compression is visible rather than silent.
 // ============================================================================
 
-/** Where a widget writes: bucket, folder and (for singletons) fixed name. */
+/** Where a widget writes: which bucket, and which folder inside it. */
 interface Destination {
   /** Storage bucket. Omitted → the compressed data URL is stored locally. */
   bucket?: ImageBucket
   /** Folder inside the bucket, usually the owning record's id. */
   folder?: string
-  /** Fixed object name for a singleton asset, e.g. `logo` or `favicon`. */
-  name?: string
   /** Compression profile applied to every picked file. */
   preset?: ImagePresetName
 }
@@ -87,7 +85,6 @@ export const ImageField = ({
   accept = 'image/*',
   bucket,
   folder,
-  name,
   preset,
 }: SingleProps) => {
   const { t } = useTranslation()
@@ -105,7 +102,6 @@ export const ImageField = ({
       const result = await uploadImage(file, {
         bucket,
         folder,
-        name,
         preset,
         // An explicit `maxEdge` overrides the preset, so a caller can pin an
         // exact size (a 256 px favicon) without inventing a preset for it.

@@ -172,6 +172,25 @@ sont conservés octet pour octet — il n'y a plus rien à gagner, seulement du
 détail à perdre. Le gain est affiché à l'utilisateur après chaque envoi
 (« Image compressée · 4,8 Mo → 412 Ko (−91 %) »).
 
+### Aucune image n'est jamais écrasée
+
+Chaque envoi reçoit un nom aléatoire. Ce n'est pas seulement une question de
+cache : la plupart de ces champs modifient un **brouillon** que l'utilisateur
+peut encore abandonner — le favicon et l'image de fond sont derrière un bouton
+*Réinitialiser*, un article derrière *Annuler*. Écrire à un chemin fixe au
+moment du choix détruirait l'image en ligne **avant** que l'utilisateur ait
+confirmé son remplacement, et *Réinitialiser* restaurerait alors une URL
+pointant vers les nouveaux octets.
+
+En contrepartie, les photos remplacées et les brouillons abandonnés restent
+dans le bucket. **Paramètres → Nettoyer les images** les récupère : la fonction
+liste ce que contient chaque bucket, en retire tout ce que la boutique référence
+encore, et supprime le reste. Deux garde-fous évitent qu'elle touche une image
+vivante — rien de plus récent que **24 h** n'est supprimé (un formulaire peut
+être ouvert avec des photos pas encore enregistrées), et le nettoyage refuse de
+s'exécuter si *rien* ne semble référencé, ce à quoi ressemblerait une base
+IndexedDB non chargée.
+
 ---
 
 ## Permissions

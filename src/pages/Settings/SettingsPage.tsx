@@ -1,15 +1,17 @@
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { Store, UserCog, Database, Download, Upload, Check, Image as ImageIcon } from 'lucide-react'
+import { Store, UserCog, Database, Download, Upload, Check, Eraser, Image as ImageIcon } from 'lucide-react'
 import { PageHeader } from '@/components/ui/Misc'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { exportData, importData } from '@/utils/export'
 import { uploadImage } from '@/lib/imageUpload'
+import { pruneOrphanImages } from '@/lib/storageCleanup'
 import { formatBytes, savedPercent } from '@/utils/media'
 import { fadeUp, staggerContainer } from '@/utils/animations'
 
@@ -31,6 +33,8 @@ export const SettingsPage = () => {
   const logoRef = useRef<HTMLInputElement>(null)
 
   const [logoBusy, setLogoBusy] = useState(false)
+  const [pruning, setPruning] = useState(false)
+  const [confirmPrune, setConfirmPrune] = useState(false)
   const [store, setStore] = useState(settings)
   const [account, setAccount] = useState({
     fullName: currentUser?.fullName ?? '',
@@ -61,7 +65,7 @@ export const SettingsPage = () => {
     try {
       const result = await uploadImage(file, {
         bucket: 'store-assets',
-        name: 'logo',
+        folder: 'logo',
         preset: 'logo',
       })
       setStore((s) => ({ ...s, logo: result.src }))
@@ -78,6 +82,25 @@ export const SettingsPage = () => {
       setLogoBusy(false)
       e.target.value = ''
     }
+  }
+
+  /**
+   * Reclaim bucket images no longer pointed at by any article, offer, carrier
+   * or setting — the residue of replaced photos and abandoned drafts. Anything
+   * uploaded in the last 24 h is left alone, so a form still open somewhere
+   * cannot lose its photos.
+   */
+  const onPrune = async () => {
+    setConfirmPrune(false)
+    setPruning(true)
+    const result = await pruneOrphanImages()
+    setPruning(false)
+
+    if (result.status === 'not-configured') return toast.error(t('storageOffline'))
+    if (result.status === 'not-hydrated') return toast.error(t('storageNothingToScan'))
+    if (result.status === 'failed') return toast.error(result.message)
+    if (result.deleted === 0) return toast.success(t('storageAlreadyClean'))
+    toast.success(`${t('storageCleaned')} · ${result.deleted} · ${formatBytes(result.freed)}`)
   }
 
   const onRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,9 +186,24 @@ export const SettingsPage = () => {
               <input ref={fileRef} type="file" accept="application/json" onChange={onRestore} className="hidden" />
               <Button variant="gold" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('restore')}</Button>
             </div>
+            <div className="rounded-xl border border-wood-light/25 p-4">
+              <p className="font-semibold text-wood-dark">{t('cleanStorage')}</p>
+              <p className="mb-3 text-xs text-wood-medium">{t('cleanStorageHint')}</p>
+              <Button variant="outline" disabled={pruning} onClick={() => setConfirmPrune(true)}>
+                <Eraser size={16} />{pruning ? t('loading') : t('cleanStorage')}
+              </Button>
+            </div>
           </div>
         </Section>
       </motion.div>
+
+      <ConfirmDialog
+        open={confirmPrune}
+        onClose={() => setConfirmPrune(false)}
+        onConfirm={onPrune}
+        title={t('cleanStorage')}
+        message={t('cleanStorageConfirm')}
+      />
     </div>
   )
 }

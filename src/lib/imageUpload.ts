@@ -13,10 +13,19 @@
 //     boutique is local-first: a network outage must never block a sale, so an
 //     upload failure degrades silently instead of throwing.
 //
-// Objects are never overwritten in place for galleries — each upload gets its
-// own random name — so a browser that cached an old photo can never show it in
-// place of a new one. The singletons (logo, favicon, hero) do reuse a fixed
-// name, and get a cache-busting query string instead.
+// An object is *never* overwritten in place. Every upload gets its own random
+// name, for two reasons:
+//
+//   • A cached copy of an old photo can never be served in place of a new one.
+//   • Most of these inputs edit a draft that the user can still cancel — the
+//     favicon and hero sit behind a Reset button, a product modal behind
+//     Cancel. Overwriting the live object at pick time would destroy the
+//     current image before the user ever committed to replacing it, and Reset
+//     would restore a URL pointing at the new bytes.
+//
+// The cost is that replaced and abandoned images linger in the bucket. They are
+// collected by `pruneOrphanImages` (see `./storageCleanup`), which the owner
+// runs from the Paramètres screen.
 // ============================================================================
 
 import { supabase } from './supabase'
@@ -38,11 +47,6 @@ export interface UploadTarget {
   bucket: ImageBucket
   /** Folder inside the bucket, e.g. a product id. Empty for bucket root. */
   folder?: string
-  /**
-   * Fixed object name for a singleton (`logo`, `favicon`, `hero`). Left out for
-   * galleries, where every upload gets a random name of its own.
-   */
-  name?: string
 }
 
 export interface UploadOptions extends Partial<UploadTarget> {
@@ -84,7 +88,7 @@ const extensionOf = (file: File): string => {
 
 /** `folder/name`, with no leading or doubled slashes for Supabase to reject. */
 const objectPath = (target: UploadTarget, file: File): string => {
-  const leaf = target.name ? `${target.name}.${extensionOf(file)}` : randomName(extensionOf(file))
+  const leaf = randomName(extensionOf(file))
   const folder = (target.folder ?? '').replace(/^\/+|\/+$/g, '')
   return folder ? `${folder}/${leaf}` : leaf
 }
@@ -100,7 +104,7 @@ export const uploadImage = async (
   file: File,
   options: UploadOptions = {},
 ): Promise<UploadedImage> => {
-  const { bucket, folder, name, preset, maxEdge, maxBytes, onProgress } = options
+  const { bucket, folder, preset, maxEdge, maxBytes, onProgress } = options
 
   // Compression is nine tenths of the work, so it owns nine tenths of the bar.
   const compressed: CompressedImage = await compressImageFile(file, {
@@ -123,23 +127,18 @@ export const uploadImage = async (
   }
 
   try {
-    const path = objectPath({ bucket, folder, name }, compressed.file)
+    const path = objectPath({ bucket, folder }, compressed.file)
     const { error } = await supabase.storage.from(bucket).upload(path, compressed.file, {
       contentType: compressed.file.type,
+      // The name is unique, so the object is immutable: cache it for a year.
       cacheControl: '31536000',
-      // Singletons overwrite their fixed name; gallery uploads never collide.
-      upsert: true,
+      upsert: false,
     })
     if (error) throw error
 
     const { publicUrl } = supabase.storage.from(bucket).getPublicUrl(path).data
     onProgress?.(100)
-    return {
-      ...local,
-      // A fixed name is reused, so the CDN copy has to be invalidated by hand.
-      src: name ? `${publicUrl}?v=${Date.now().toString(36)}` : publicUrl,
-      remote: true,
-    }
+    return { ...local, src: publicUrl, remote: true }
   } catch {
     // Offline, bucket missing, or the account lacks the write permission. The
     // compressed image still goes into the local database.

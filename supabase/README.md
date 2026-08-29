@@ -101,15 +101,32 @@ a signed URL — writing still needs the matching permission.
 | `product-images` | `<product_id>/<random>.webp` | `stock:edit` or `website:edit` |
 | `offer-images` | `<offer_id>/<random>.webp` | `website:edit` |
 | `delivery-logos` | `<company_id>/<random>.webp` | `website:edit` |
-| `store-assets` | `logo.webp`, `favicon.webp`, `hero.webp` | `settings:edit` or `website:edit` |
+| `store-assets` | `logo/<random>.webp`, `favicon/<random>.webp`, `hero/<random>.webp` | `settings:edit` or `website:edit` |
 
-Gallery objects get a **random name** so a replaced photo can never be served
-from a stale CDN copy. The three singletons in `store-assets` do reuse a fixed
-name — they are uploaded with `upsert: true` and the app appends a `?v=` query
-string to bust the cache.
+**Objects are never overwritten.** Every upload gets a random name, including
+the store assets. That is not only about stale caches: most of these inputs edit
+a draft the user can still abandon — the favicon and hero sit behind a *Reset*
+button, a product behind *Cancel*. Writing to a fixed path at pick time would
+destroy the live image before the user ever committed to replacing it, and
+*Reset* would then restore a URL pointing at the new bytes.
+
+Because nothing is overwritten, the object is immutable and served with
+`cache-control: 31536000` — no cache-busting query string is needed.
 
 A record created before it is saved has no id yet, so its first uploads land in
 a `nouveau/` folder inside the bucket.
+
+### Reclaiming orphans
+
+The flip side of never overwriting is that replaced photos and abandoned drafts
+linger. `pruneOrphanImages()` (`src/lib/storageCleanup.ts`) lists what each
+bucket holds, subtracts everything the boutique still references, and deletes
+the rest. The owner runs it from **Paramètres → Nettoyer les images**.
+
+Two guards keep it from eating a live image: an object younger than **24 h** is
+never touched (a form may be open with photos not yet saved to any record), and
+the sweep refuses to run when nothing at all appears referenced — which is what
+an unhydrated IndexedDB would look like.
 
 ### Uploading from the app
 

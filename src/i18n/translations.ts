@@ -475,6 +475,15 @@ export const fr = {
   compressingImage: 'Compression…',
   imageCompressed: 'Image compressée',
   imageUploadFailed: 'Image illisible',
+  cleanStorage: 'Nettoyer les images',
+  cleanStorageHint:
+    'Supprime du stockage les images qu’aucun article, offre, transporteur ou réglage n’utilise plus — les photos remplacées et les brouillons abandonnés.',
+  cleanStorageConfirm:
+    'Les images inutilisées seront définitivement supprimées du stockage. Celles envoyées dans les dernières 24 heures sont conservées. Continuer ?',
+  storageCleaned: 'Stockage nettoyé',
+  storageAlreadyClean: 'Aucune image inutilisée',
+  storageNothingToScan: 'Aucune image à analyser',
+  storageOffline: 'Stockage non configuré',
   // ── Website orders ──────────────────────────────────────────────
   webOrdersSubtitle: 'Suivez et traitez les commandes de la boutique en ligne',
   orderStatus_pending: 'En attente',
@@ -1046,6 +1055,15 @@ export const ar: Record<TranslationKey, string> = {
   compressingImage: 'جارٍ الضغط…',
   imageCompressed: 'تم ضغط الصورة',
   imageUploadFailed: 'تعذّرت قراءة الصورة',
+  cleanStorage: 'تنظيف الصور',
+  cleanStorageHint:
+    'يحذف من التخزين الصور التي لم يعد يستخدمها أي منتج أو عرض أو ناقل أو إعداد.',
+  cleanStorageConfirm:
+    'ستُحذف الصور غير المستخدمة نهائيًا، مع الإبقاء على ما رُفع خلال آخر 24 ساعة. متابعة؟',
+  storageCleaned: 'تم تنظيف التخزين',
+  storageAlreadyClean: 'لا توجد صور غير مستخدمة',
+  storageNothingToScan: 'لا توجد صور للفحص',
+  storageOffline: 'التخزين غير مُهيأ',
   // ── Website orders ──────────────────────────────────────────────
   webOrdersSubtitle: 'تابع وعالج طلبات المتجر الإلكتروني',
   orderStatus_pending: 'قيد الانتظار',

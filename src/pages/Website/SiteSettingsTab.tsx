@@ -76,7 +76,7 @@ export const SiteSettingsTab = () => {
               accept="image/png,image/svg+xml,image/x-icon,image/jpeg"
               hint={t('faviconHint')}
               bucket="store-assets"
-              name="favicon"
+              folder="favicon"
               preset="favicon"
             />
             <ImageField
@@ -86,7 +86,7 @@ export const SiteSettingsTab = () => {
               ratio="wide"
               hint={t('heroHint')}
               bucket="store-assets"
-              name="hero"
+              folder="hero"
               preset="hero"
             />
           </div>

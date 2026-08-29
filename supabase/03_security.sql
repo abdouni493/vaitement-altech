@@ -521,11 +521,15 @@ grant select on public.wilayas, public.communes to anon;
 --    product-images/<product_id>/<random>.webp
 --    offer-images/<offer_id>/<random>.webp
 --    delivery-logos/<company_id>/<random>.webp
---    store-assets/logo.webp · store-assets/favicon.webp · store-assets/hero.webp
+--    store-assets/<logo|favicon|hero>/<random>.webp
 --
 --  The app uploads through `uploadImage` (src/lib/imageUpload.ts), which
 --  recompresses every picked file to a few hundred kilobytes of WebP first.
 --  The size limits below are a backstop, not the target.
+--
+--  An object is never overwritten: every upload gets a random name, so a draft
+--  the user later cancels cannot destroy the image it was going to replace.
+--  Orphans are swept up by `pruneOrphanImages` from the Parametres screen.
 -- ============================================================================
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
