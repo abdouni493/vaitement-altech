@@ -17,15 +17,16 @@
 //     product modal open with freshly uploaded photos that are not yet saved
 //     to any record; without the grace period, a sweep from another tab would
 //     delete them out from under the form.
-//   • It refuses to run at all when the stores look unhydrated. If IndexedDB
-//     had not loaded yet, *nothing* would appear referenced and the sweep
-//     would cheerfully empty every bucket.
+//   • It refuses to run at all until the boutique has been read back from
+//     Supabase. Before that load lands, *nothing* would appear referenced and
+//     the sweep would cheerfully empty every bucket.
 // ============================================================================
 
 import { supabase } from './supabase'
 import { useProductStore } from '@/store/useProductStore'
 import { useWebsiteStore } from '@/store/useWebsiteStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useBootstrap } from '@/store/bootstrap'
 
 const BUCKETS = ['product-images', 'offer-images', 'delivery-logos', 'store-assets'] as const
 
@@ -49,7 +50,7 @@ export interface PruneReport {
 export type PruneOutcome =
   | ({ status: 'ok' } & PruneReport)
   | { status: 'not-configured' }
-  | { status: 'not-hydrated' }
+  | { status: 'not-loaded' }
   | { status: 'failed'; message: string }
 
 /**
@@ -133,12 +134,15 @@ const listBucket = async (bucket: string, prefix = ''): Promise<StoredObject[]> 
 export const pruneOrphanImages = async (): Promise<PruneOutcome> => {
   if (!supabase) return { status: 'not-configured' }
 
+  // The guard, in two parts. A load that has not landed leaves every store
+  // empty, and an empty store makes every object look like an orphan.
+  if (!useBootstrap.getState().loaded) return { status: 'not-loaded' }
+
   const referenced = referencedPaths()
 
-  // The guard: an unhydrated store makes every object look like an orphan.
   // A boutique that genuinely holds no images also has nothing to reclaim, so
   // refusing in both cases costs nothing and removes the whole class of risk.
-  if (referenced.size === 0) return { status: 'not-hydrated' }
+  if (referenced.size === 0) return { status: 'not-loaded' }
 
   const report: PruneReport = { scanned: 0, deleted: 0, freed: 0, skippedRecent: 0 }
   const cutoff = Date.now() - GRACE_MS

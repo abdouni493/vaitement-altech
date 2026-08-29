@@ -1,96 +1,48 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { WebOrder, WebOrderLine, WebOrderStatus, DeliveryMode } from '@/types'
-import { uid, round2 } from '@/utils/helpers'
-import { idbStorage, onRehydrate, storeKey } from './persist'
+import type { WebOrder, WebOrderLine, WebOrderStatus } from '@/types'
+import { round2 } from '@/utils/helpers'
+import * as db from '@/lib/db'
 import { useProductStore } from './useProductStore'
 import { useCaisseStore } from './useCaisseStore'
 
+// ============================================================================
+// Online orders
 // ----------------------------------------------------------------------------
-// Side effects on the rest of the boutique
-// ----------------------------------------------------------------------------
-
-/**
- * Stock only moves when the parcel physically leaves — on `delivered` — and
- * comes back on `returned`. `stockAppliedAt` guards the transition so an edit,
- * a double click or a re-accept can never decrement twice.
- */
-const takeStock = (lines: WebOrderLine[]) => {
-  const { reduceStock } = useProductStore.getState()
-  lines.forEach((l) => reduceStock(l.productId, l.size, l.quantity))
-}
-
-const giveStockBack = (lines: WebOrderLine[]) => {
-  const { products, updateProduct } = useProductStore.getState()
-  lines.forEach((l) => {
-    const product = products.find((p) => p.id === l.productId)
-    if (!product) return
-    if (product.sizes.length === 0 && !l.size) {
-      updateProduct(product.id, { quantity: product.quantity + l.quantity })
-      return
-    }
-    const exists = product.sizes.some((s) => s.size === l.size)
-    const sizes = exists
-      ? product.sizes.map((s) => (s.size === l.size ? { ...s, quantity: s.quantity + l.quantity } : s))
-      : [...product.sizes, { size: l.size, quantity: l.quantity }]
-    // `updateProduct` re-derives the article total from the size breakdown.
-    updateProduct(product.id, { sizes })
-  })
-}
-
-const bookRevenue = (order: WebOrder) => {
-  useCaisseStore.getState().addTransaction({
-    type: 'deposit',
-    amount: order.total,
-    description: `Commande web ${order.reference} — ${order.customerName}`,
-    date: new Date().toISOString(),
-  })
-}
-
-const stamp = (order: WebOrder, status: WebOrderStatus, note?: string): WebOrder => ({
-  ...order,
-  status,
-  history: [...order.history, { status, at: new Date().toISOString(), note }],
-})
-
-// ----------------------------------------------------------------------------
-// Store
-// ----------------------------------------------------------------------------
-
-export interface NewOrderInput {
-  customerName: string
-  phone: string
-  wilayaCode: string
-  wilaya: string
-  commune: string
-  address: string
-  deliveryMode: DeliveryMode
-  deliveryCompanyId: string | null
-  deliveryCompanyName: string
-  deliveryPrice: number
-  lines: WebOrderLine[]
-  note?: string
-}
+// The lifecycle lives in the database, not here:
+//
+//   pending ──accept──▶ accepted ──deliver──▶ delivered ──cash──▶ completed
+//      │                    │                     │
+//      └──────cancel────────┘                     └──return──▶ returned
+//
+// Each transition is an RPC, and the two side effects that matter — stock
+// leaving the boutique and money entering the caisse — are guarded server-side
+// by `stock_applied_at` and `cashed_at`. A double click, a stale tab or a
+// second device therefore cannot apply either twice, which is exactly what the
+// browser could not guarantee on its own.
+//
+// After a transition the affected stores are re-read rather than patched, so
+// what the screen shows is what the database did.
+// ============================================================================
 
 interface OrderState {
   orders: WebOrder[]
-  /** Monotonic counter behind the human-readable reference. */
-  counter: number
+  loading: boolean
 
-  addOrder: (data: NewOrderInput) => WebOrder
-  updateOrder: (id: string, data: Partial<WebOrder>) => void
-  deleteOrder: (id: string) => void
+  load: () => Promise<void>
+
+  updateOrder: (id: string, data: Partial<WebOrder>) => Promise<void>
+  deleteOrder: (id: string) => Promise<void>
 
   /** pending | canceled → accepted. */
-  acceptOrder: (id: string) => void
+  acceptOrder: (id: string) => Promise<void>
   /** Anything → canceled; returns stock if it had already left. */
-  cancelOrder: (id: string, note?: string) => void
+  cancelOrder: (id: string, note?: string) => Promise<void>
   /** accepted → delivered: assigns the carrier and takes the stock out. */
-  deliverOrder: (id: string, companyId: string, companyName: string, price?: number) => void
+  deliverOrder: (id: string, companyId: string, companyName: string, price?: number) => Promise<void>
   /** delivered → returned: the customer refused, stock comes back. */
-  returnOrder: (id: string, note?: string) => void
+  returnOrder: (id: string, note?: string) => Promise<void>
   /** delivered → completed: the money is booked into the caisse. */
-  cashOrder: (id: string) => void
+  cashOrder: (id: string) => Promise<void>
 }
 
 /** Recompute an order's money from its lines and carrier tariff. */
@@ -99,110 +51,62 @@ export const priceOrder = (lines: WebOrderLine[], deliveryPrice: number) => {
   return { subtotal, total: round2(subtotal + deliveryPrice) }
 }
 
-export const useOrderStore = create<OrderState>()(
-  persist(
-    (set, get) => ({
-      orders: [],
-      counter: 0,
+export const useOrderStore = create<OrderState>()((set) => {
+  /** Slot the row the RPC returned back into the list. */
+  const replace = (order: WebOrder) =>
+    set((s) => ({ orders: s.orders.map((o) => (o.id === order.id ? order : o)) }))
 
-      addOrder: (data) => {
-        const next = get().counter + 1
-        const { subtotal, total } = priceOrder(data.lines, data.deliveryPrice)
-        const now = new Date().toISOString()
-        const order: WebOrder = {
-          ...data,
-          id: uid('web'),
-          reference: `WEB-${String(next).padStart(6, '0')}`,
-          subtotal,
-          total,
-          status: 'pending',
-          note: data.note ?? '',
-          history: [{ status: 'pending', at: now }],
-          createdAt: now,
-        }
-        set((s) => ({ orders: [order, ...s.orders], counter: next }))
-        return order
-      },
+  return {
+    orders: [],
+    loading: false,
 
-      updateOrder: (id, data) =>
-        set((s) => ({
-          orders: s.orders.map((o) => {
-            if (o.id !== id) return o
-            const merged = { ...o, ...data }
-            return { ...merged, ...priceOrder(merged.lines, merged.deliveryPrice) }
-          }),
-        })),
-
-      deleteOrder: (id) =>
-        set((s) => {
-          const order = s.orders.find((o) => o.id === id)
-          // Deleting an order whose stock is still out puts the articles back.
-          if (order?.stockAppliedAt) giveStockBack(order.lines)
-          return { orders: s.orders.filter((o) => o.id !== id) }
-        }),
-
-      acceptOrder: (id) =>
-        set((s) => ({
-          orders: s.orders.map((o) => (o.id === id ? stamp(o, 'accepted') : o)),
-        })),
-
-      cancelOrder: (id, note) =>
-        set((s) => ({
-          orders: s.orders.map((o) => {
-            if (o.id !== id) return o
-            if (o.stockAppliedAt) {
-              giveStockBack(o.lines)
-              return { ...stamp(o, 'canceled', note), stockAppliedAt: undefined }
-            }
-            return stamp(o, 'canceled', note)
-          }),
-        })),
-
-      deliverOrder: (id, companyId, companyName, price) =>
-        set((s) => ({
-          orders: s.orders.map((o) => {
-            if (o.id !== id) return o
-            if (!o.stockAppliedAt) takeStock(o.lines)
-            const deliveryPrice = price ?? o.deliveryPrice
-            const next: WebOrder = {
-              ...stamp(o, 'delivered', companyName),
-              deliveryCompanyId: companyId,
-              deliveryCompanyName: companyName,
-              deliveryPrice,
-              stockAppliedAt: o.stockAppliedAt ?? new Date().toISOString(),
-            }
-            return { ...next, ...priceOrder(next.lines, deliveryPrice) }
-          }),
-        })),
-
-      returnOrder: (id, note) =>
-        set((s) => ({
-          orders: s.orders.map((o) => {
-            if (o.id !== id) return o
-            if (o.stockAppliedAt) giveStockBack(o.lines)
-            return { ...stamp(o, 'returned', note), stockAppliedAt: undefined }
-          }),
-        })),
-
-      cashOrder: (id) => {
-        const order = get().orders.find((o) => o.id === id)
-        if (!order || order.cashedAt) return
-        bookRevenue(order)
-        set((s) => ({
-          orders: s.orders.map((o) =>
-            o.id === id ? { ...stamp(o, 'completed'), cashedAt: new Date().toISOString() } : o,
-          ),
-        }))
-      },
-    }),
-    {
-      name: storeKey('weborders'),
-      storage: idbStorage(),
-      partialize: (s) => ({ orders: s.orders, counter: s.counter }),
-      onRehydrateStorage: onRehydrate('weborders'),
+    load: async () => {
+      set({ loading: true })
+      try {
+        set({ orders: await db.fetchOrders() })
+      } finally {
+        set({ loading: false })
+      }
     },
-  ),
-)
+
+    updateOrder: async (id, data) => {
+      replace(await db.updateOrder(id, data))
+    },
+
+    deleteOrder: async (id) => {
+      await db.deleteOrder(id)
+      set((s) => ({ orders: s.orders.filter((o) => o.id !== id) }))
+      // Deleting an order whose stock was still out puts the articles back.
+      await useProductStore.getState().load()
+    },
+
+    acceptOrder: async (id) => {
+      replace(await db.acceptOrder(id))
+    },
+
+    cancelOrder: async (id, note) => {
+      replace(await db.cancelOrder(id, note ?? ''))
+      await useProductStore.getState().load()
+    },
+
+    deliverOrder: async (id, companyId, _companyName, price) => {
+      replace(await db.deliverOrder(id, companyId, price))
+      // The units have left the boutique.
+      await useProductStore.getState().load()
+    },
+
+    returnOrder: async (id, note) => {
+      replace(await db.returnOrder(id, note ?? ''))
+      await useProductStore.getState().load()
+    },
+
+    cashOrder: async (id) => {
+      replace(await db.cashOrder(id))
+      // `web_order_cash()` booked the deposit; read the caisse back.
+      await useCaisseStore.getState().load()
+    },
+  }
+})
 
 // ----------------------------------------------------------------------------
 // Selectors

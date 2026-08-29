@@ -29,6 +29,7 @@ import { formatMoney, brokenSizes, compareSizes } from '@/utils/helpers'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Product } from '@/types'
 import type { TranslationKey } from '@/i18n/translations'
+import { commit } from '@/utils/mutate'
 import toast from 'react-hot-toast'
 
 /** Warns that an article is unsellable in one of its sizes while still on sale. */
@@ -475,10 +476,7 @@ export const StockPage = () => {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         onConfirm={() => {
-          if (deleting) {
-            deleteProduct(deleting.id)
-            toast.success(t('deleted'))
-          }
+          if (deleting) commit(deleteProduct(deleting.id), { success: t('deleted') })
         }}
       />
     </div>

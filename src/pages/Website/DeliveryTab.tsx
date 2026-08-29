@@ -16,6 +16,7 @@ import { WILAYAS, TOTAL_COMMUNES } from '@/data/algeria'
 import { cardVariants } from '@/utils/animations'
 import { DeliveryPricesModal } from './DeliveryPricesModal'
 import type { DeliveryCompany } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const DeliveryTab = () => {
   const { t } = useTranslation()
@@ -52,12 +53,12 @@ export const DeliveryTab = () => {
   const save = () => {
     setTouched(true)
     if (!name.trim()) return
-    if (editing) {
-      updateCompany(editing.id, { name: name.trim(), phone, logo, notes })
-    } else {
-      addCompany({ name: name.trim(), phone, logo, notes })
-    }
-    toast.success(t('saved'))
+    commit(
+      editing
+        ? updateCompany(editing.id, { name: name.trim(), phone, logo, notes })
+        : addCompany({ name: name.trim(), phone, logo, notes }),
+      { success: t('saved') },
+    )
     setForm(false)
     setEditing(null)
   }
@@ -186,8 +187,7 @@ export const DeliveryTab = () => {
                   </button>
                   <button
                     onClick={() => {
-                      toggleCompany(c.id)
-                      toast.success(c.active ? t('inactive') : t('active'))
+                      commit(toggleCompany(c.id), { success: c.active ? t('inactive') : t('active') })
                     }}
                     title={c.active ? t('deactivate') : t('activate')}
                     aria-label={c.active ? t('deactivate') : t('activate')}
@@ -271,10 +271,7 @@ export const DeliveryTab = () => {
         open={!!removing}
         onClose={() => setRemoving(null)}
         onConfirm={() => {
-          if (removing) {
-            deleteCompany(removing.id)
-            toast.success(t('deleted'))
-          }
+          if (removing) commit(deleteCompany(removing.id), { success: t('deleted') })
           setRemoving(null)
         }}
         title={t('delete')}

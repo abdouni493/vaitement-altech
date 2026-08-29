@@ -10,6 +10,7 @@ import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney, monthKey } from '@/utils/helpers'
 import { computeSalary } from '@/utils/calculations'
 import type { Worker } from '@/types'
+import { commit } from '@/utils/mutate'
 
 interface OpProps {
   open: boolean
@@ -27,8 +28,14 @@ export const AdvancesModal = ({ open, onClose, worker }: OpProps) => {
       toast.error(t('required'))
       return
     }
-    addAdvance(worker.id, { date: new Date(form.date).toISOString(), description: form.description, amount: form.amount })
-    toast.success(t('saved'))
+    commit(
+      addAdvance(worker.id, {
+        date: new Date(form.date).toISOString(),
+        description: form.description,
+        amount: form.amount,
+      }),
+      { success: t('saved') },
+    )
     setForm({ date: format(new Date(), 'yyyy-MM-dd'), description: '', amount: 0 })
   }
 
@@ -79,8 +86,14 @@ export const AbsencesModal = ({ open, onClose, worker }: OpProps) => {
       toast.error(t('required'))
       return
     }
-    addAbsence(worker.id, { date: new Date(form.date).toISOString(), description: form.description, cost: form.cost })
-    toast.success(t('saved'))
+    commit(
+      addAbsence(worker.id, {
+        date: new Date(form.date).toISOString(),
+        description: form.description,
+        cost: form.cost,
+      }),
+      { success: t('saved') },
+    )
     setForm({ date: format(new Date(), 'yyyy-MM-dd'), description: '', cost: 0 })
   }
 
@@ -137,16 +150,18 @@ export const SalaryModal = ({ open, onClose, worker }: OpProps) => {
   }, [calc.toPay, period]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = () => {
-    addPayment(worker.id, {
-      period,
-      baseSalary: calc.base,
-      absencesDeducted: calc.absences,
-      advancesDeducted: calc.advances,
-      amount,
-      date: new Date(date).toISOString(),
-      note: note || undefined,
-    })
-    toast.success(t('saved'))
+    commit(
+      addPayment(worker.id, {
+        period,
+        baseSalary: calc.base,
+        absencesDeducted: calc.absences,
+        advancesDeducted: calc.advances,
+        amount,
+        date: new Date(date).toISOString(),
+        note: note || undefined,
+      }),
+      { success: t('saved') },
+    )
     onClose()
   }
 

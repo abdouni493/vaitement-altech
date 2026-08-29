@@ -16,6 +16,7 @@ import { formatMoney, initials } from '@/utils/helpers'
 import { supplierStats, remaining } from '@/utils/calculations'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Supplier } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const SuppliersPage = () => {
   const { t } = useTranslation()
@@ -49,9 +50,7 @@ export const SuppliersPage = () => {
       toast.error(t('required'))
       return
     }
-    if (editing) updateSupplier(editing.id, form)
-    else addSupplier(form)
-    toast.success(t('saved'))
+    commit(editing ? updateSupplier(editing.id, form) : addSupplier(form), { success: t('saved') })
     setFormOpen(false)
   }
 
@@ -147,7 +146,7 @@ export const SuppliersPage = () => {
         )}
       </Modal>
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deleteSupplier(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) commit(deleteSupplier(deleting.id), { success: t('deleted') }) }} />
     </div>
   )
 }

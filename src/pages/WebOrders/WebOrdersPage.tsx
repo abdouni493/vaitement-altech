@@ -31,6 +31,7 @@ import { cardVariants } from '@/utils/animations'
 import { clsx } from '@/utils/clsx'
 import { WEB_ORDER_STATUSES, type WebOrder, type WebOrderStatus } from '@/types'
 import type { TranslationKey } from '@/i18n/translations'
+import { commit } from '@/utils/mutate'
 import { OrderEditModal } from './OrderEditModal'
 
 const statusTone = (
@@ -119,8 +120,11 @@ export const WebOrdersPage = () => {
         ? tariff.home
         : tariff.desk
       : delivering.deliveryPrice
-    deliverOrder(delivering.id, company.id, company.name, price)
-    toast.success(t('orderDelivered'))
+    // The RPC refuses a transition the order cannot make and guards the stock
+    // movement, so a refusal here is a real answer and must be shown.
+    commit(deliverOrder(delivering.id, company.id, company.name, price), {
+      success: t('orderDelivered'),
+    })
     setDelivering(null)
     setDetails(null)
   }
@@ -129,14 +133,11 @@ export const WebOrdersPage = () => {
     if (!confirm) return
     const { order, action } = confirm
     if (action === 'cancel') {
-      cancelOrder(order.id)
-      toast.success(t('orderCanceled'))
+      commit(cancelOrder(order.id), { success: t('orderCanceled') })
     } else if (action === 'return') {
-      returnOrder(order.id)
-      toast.success(t('orderReturned'))
+      commit(returnOrder(order.id), { success: t('orderReturned') })
     } else {
-      cashOrder(order.id)
-      toast.success(t('orderCashed'))
+      commit(cashOrder(order.id), { success: t('orderCashed') })
     }
     setConfirm(null)
     setDetails(null)
@@ -161,10 +162,7 @@ export const WebOrdersPage = () => {
         key: 'accept',
         label: t('acceptOrder'),
         icon: <Check size={13} />,
-        onClick: () => {
-          acceptOrder(o.id)
-          toast.success(t('orderAccepted'))
-        },
+        onClick: () => commit(acceptOrder(o.id), { success: t('orderAccepted') }),
         tone: 'accent',
         hidden: !mayEdit,
       })
@@ -174,10 +172,7 @@ export const WebOrdersPage = () => {
         key: 'reaccept',
         label: t('reacceptOrder'),
         icon: <RotateCcw size={13} />,
-        onClick: () => {
-          acceptOrder(o.id)
-          toast.success(t('orderAccepted'))
-        },
+        onClick: () => commit(acceptOrder(o.id), { success: t('orderAccepted') }),
         tone: 'accent',
         hidden: !mayEdit,
       })
@@ -214,10 +209,7 @@ export const WebOrdersPage = () => {
         key: 'reaccept2',
         label: t('reacceptOrder'),
         icon: <RotateCcw size={13} />,
-        onClick: () => {
-          acceptOrder(o.id)
-          toast.success(t('orderAccepted'))
-        },
+        onClick: () => commit(acceptOrder(o.id), { success: t('orderAccepted') }),
         hidden: !mayEdit,
       })
     }

@@ -13,6 +13,7 @@ import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney } from '@/utils/helpers'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Expense } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const ExpensesPage = () => {
   const { t } = useTranslation()
@@ -57,9 +58,9 @@ export const ExpensesPage = () => {
       return
     }
     const payload = { ...form, date: new Date(form.date).toISOString() }
-    if (editing) updateExpense(editing.id, payload)
-    else addExpense(payload)
-    toast.success(t('saved'))
+    commit(editing ? updateExpense(editing.id, payload) : addExpense(payload), {
+      success: t('saved'),
+    })
     setFormOpen(false)
   }
 
@@ -113,7 +114,7 @@ export const ExpensesPage = () => {
         </div>
       </Modal>
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deleteExpense(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) commit(deleteExpense(deleting.id), { success: t('deleted') }) }} />
     </div>
   )
 }

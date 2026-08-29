@@ -155,6 +155,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
   const [sizes, setSizes] = useState<SizeStock[]>([])
   /** Storefront photos, likewise a list rather than a field. */
   const [images, setImages] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
 
   const {
     register,
@@ -229,7 +230,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
     setSizes((prev) => prev.filter((s) => scale.includes(s.size)))
   }
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
     const common = {
       name: data.name,
       description: data.description ?? '',
@@ -246,21 +247,30 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
       collection: data.collection ?? '',
     }
 
-    if (product) {
-      updateProduct(product.id, common)
-      toast.success(t('saved'))
-      onSaved?.({ ...product, ...common })
-    } else {
-      const created = addProduct({
-        ...common,
-        purchasePrice: 0,
-        salePrice: 0,
-        minQuantity: 0,
-      })
-      toast.success(t('saved'))
-      onSaved?.(created)
+    setSaving(true)
+    try {
+      if (product) {
+        await updateProduct(product.id, common)
+        toast.success(t('saved'))
+        onSaved?.({ ...product, ...common })
+      } else {
+        // Prices and the alert threshold are set by the first purchase, which
+        // is what the receiving trigger writes back onto the article.
+        const created = await addProduct({
+          ...common,
+          purchasePrice: 0,
+          salePrice: 0,
+          minQuantity: 0,
+        })
+        toast.success(t('saved'))
+        onSaved?.(created)
+      }
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    } finally {
+      setSaving(false)
     }
-    onClose()
   }
 
   return (
@@ -275,7 +285,7 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
           <Button variant="outline" onClick={onClose}>
             {t('cancel')}
           </Button>
-          <Button onClick={handleSubmit(onSubmit)}>
+          <Button onClick={handleSubmit(onSubmit)} disabled={saving}>
             <IconSave size={16} />
             {t('save')}
           </Button>

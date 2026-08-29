@@ -21,6 +21,7 @@ import { formatMoney, paymentStatus } from '@/utils/helpers'
 import { remaining } from '@/utils/calculations'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Purchase } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const PurchasePage = () => {
   const { t } = useTranslation()
@@ -215,11 +216,11 @@ export const PurchasePage = () => {
           total={paying.total}
           paid={paying.paid}
           payments={paying.payments}
-          onPay={(amount, date, note) => addPayment(paying.id, amount, date, note)}
+          onPay={(amount, date, note) => commit(addPayment(paying.id, amount, date, note))}
         />
       )}
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deletePurchase(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) commit(deletePurchase(deleting.id), { success: t('deleted') }) }} />
 
       {/* hidden print */}
       <div className="hidden">

@@ -9,11 +9,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useTranslation } from '@/i18n/useTranslation'
-import { exportData, importData } from '@/utils/export'
+import { exportData, restoreData } from '@/utils/export'
 import { uploadImage } from '@/lib/imageUpload'
 import { pruneOrphanImages } from '@/lib/storageCleanup'
 import { formatBytes, savedPercent } from '@/utils/media'
 import { fadeUp, staggerContainer } from '@/utils/animations'
+import { commit } from '@/utils/mutate'
+import { useBootstrap } from '@/store/bootstrap'
 
 const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
   <motion.div variants={fadeUp} className="card-wood rounded-2xl p-5">
@@ -28,6 +30,8 @@ const Section = ({ title, icon, children }: { title: string; icon: React.ReactNo
 export const SettingsPage = () => {
   const { t, lang, setLang } = useTranslation()
   const { settings, updateSettings } = useSettingsStore()
+  const loadAll = useBootstrap((s) => s.loadAll)
+  const [restoring, setRestoring] = useState(false)
   const { currentUser, updateAccount } = useAuthStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
@@ -43,13 +47,18 @@ export const SettingsPage = () => {
     password: currentUser?.password ?? '',
   })
 
-  const saveStore = () => {
-    updateSettings(store)
-    toast.success(t('saved'))
-  }
-  const saveAccount = () => {
-    updateAccount(account)
-    toast.success(t('saved'))
+  const saveStore = () => commit(updateSettings(store), { success: t('saved') })
+
+  /**
+   * The display fields go to `public.profiles`; a changed e-mail or password is
+   * an `auth.users` write. Either can be refused — a duplicate address, a
+   * password below the project's minimum — so the result is reported rather
+   * than assumed.
+   */
+  const saveAccount = async () => {
+    const result = await updateAccount(account)
+    if (result.ok) toast.success(t('saved'))
+    else toast.error(result.message ?? t('saveFailed'))
   }
 
   /**
@@ -69,7 +78,7 @@ export const SettingsPage = () => {
         preset: 'logo',
       })
       setStore((s) => ({ ...s, logo: result.src }))
-      updateSettings({ logo: result.src })
+      await updateSettings({ logo: result.src })
       const saved = savedPercent(result.originalSize, result.size)
       toast.success(
         saved >= 5
@@ -97,22 +106,38 @@ export const SettingsPage = () => {
     setPruning(false)
 
     if (result.status === 'not-configured') return toast.error(t('storageOffline'))
-    if (result.status === 'not-hydrated') return toast.error(t('storageNothingToScan'))
+    if (result.status === 'not-loaded') return toast.error(t('storageNothingToScan'))
     if (result.status === 'failed') return toast.error(result.message)
     if (result.deleted === 0) return toast.success(t('storageAlreadyClean'))
     toast.success(`${t('storageCleaned')} · ${result.deleted} · ${formatBytes(result.freed)}`)
   }
 
+  /**
+   * Replay a snapshot's master data into Supabase, then read the boutique back
+   * so the screen shows what the database actually holds. The ledgers in the
+   * file are reported rather than replayed — see `restoreData`.
+   */
   const onRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setRestoring(true)
     try {
-      await importData(file)
-      // State lives in memory: importData writes straight into the stores, and
-      // the UI re-renders from them. Reloading here would throw the restore away.
-      toast.success(t('dataRestored'))
-    } catch {
-      toast.error('Erreur')
+      const report = await restoreData(file)
+      await loadAll()
+
+      const written = report.restored.reduce((n, r) => n + r.count, 0)
+      toast.success(`${t('dataRestored')} · ${written}`)
+      if (report.skipped.length > 0) {
+        toast(`${t('restoreSkipped')} : ${report.skipped.join(', ')}`, {
+          icon: 'ℹ️',
+          duration: 7000,
+        })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setRestoring(false)
+      e.target.value = ''
     }
   }
 
@@ -158,7 +183,7 @@ export const SettingsPage = () => {
             <Input label={t('username')} value={account.username} onChange={(e) => setAccount({ ...account, username: e.target.value })} />
             <Input label={t('email')} value={account.email} onChange={(e) => setAccount({ ...account, email: e.target.value })} />
             <Input label={t('password')} value={account.password} onChange={(e) => setAccount({ ...account, password: e.target.value })} />
-            <div className="flex justify-end"><Button onClick={saveAccount}><Check size={16} />{t('save')}</Button></div>
+            <div className="flex justify-end"><Button onClick={() => void saveAccount()}><Check size={16} />{t('save')}</Button></div>
           </div>
           <div className="mt-5 border-t border-wood-light/20 pt-4">
             <p className="label-wood">{t('language')}</p>
@@ -184,7 +209,7 @@ export const SettingsPage = () => {
               <p className="font-semibold text-wood-dark">{t('restore')}</p>
               <p className="mb-3 text-xs text-wood-medium">{t('restoreHint')}</p>
               <input ref={fileRef} type="file" accept="application/json" onChange={onRestore} className="hidden" />
-              <Button variant="gold" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('restore')}</Button>
+              <Button variant="gold" disabled={restoring} onClick={() => fileRef.current?.click()}><Upload size={16} />{restoring ? t('loading') : t('restore')}</Button>
             </div>
             <div className="rounded-xl border border-wood-light/25 p-4">
               <p className="font-semibold text-wood-dark">{t('cleanStorage')}</p>

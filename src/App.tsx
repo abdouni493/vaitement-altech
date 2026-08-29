@@ -10,7 +10,7 @@ import {
 import { Toaster } from 'react-hot-toast'
 import { Layout } from '@/components/layout/Layout'
 import { useAuthStore } from '@/store/useAuthStore'
-import { useHydrated } from '@/store/hydration'
+import { useBootstrap } from '@/store/bootstrap'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { StockPage } from '@/pages/Stock/StockPage'
@@ -48,7 +48,7 @@ const RequireAuth = () => {
   )
 }
 
-/** Shown while the stores load their data from the local IndexedDB database. */
+/** Shown while the session is revalidated and the boutique is read back. */
 const Splash = () => (
   <div className="wood-grain flex min-h-screen flex-col items-center justify-center gap-6 bg-black">
     <div className="h-14 w-14 animate-float bg-white" />
@@ -59,17 +59,30 @@ const Splash = () => (
 )
 
 export default function App() {
-  const hydrated = useHydrated()
+  const restoring = useAuthStore((s) => s.restoring)
+  const currentUser = useAuthStore((s) => s.currentUser)
   const restoreSession = useAuthStore((s) => s.restoreSession)
+  const refreshAdminExists = useAuthStore((s) => s.refreshAdminExists)
+  const loadAll = useBootstrap((s) => s.loadAll)
+  const resetData = useBootstrap((s) => s.reset)
 
-  // The session is read back from IndexedDB with everything else, so the UI
-  // renders straight away on the current page. This only revalidates it in the
-  // background — an account revoked since the last visit is signed out here.
+  // Supabase keeps the session in local storage, so a refresh lands back on the
+  // same page. This revalidates it: an account deactivated or revoked since the
+  // last visit is signed out here rather than discovered mid-sale.
   useEffect(() => {
-    if (hydrated) void restoreSession()
-  }, [hydrated, restoreSession])
+    void restoreSession()
+    void refreshAdminExists()
+  }, [restoreSession, refreshAdminExists])
 
-  if (!hydrated) return <Splash />
+  // The boutique is read once the session resolves to a profile, because every
+  // table is behind a permission policy. Signing out empties the caches so the
+  // next account never sees the previous one's rows.
+  useEffect(() => {
+    if (currentUser) void loadAll()
+    else resetData()
+  }, [currentUser, loadAll, resetData])
+
+  if (restoring) return <Splash />
 
   return (
     <BrowserRouter>

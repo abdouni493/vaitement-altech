@@ -4,13 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { Home, Building2, ImageOff, Lock, AlertCircle, ChevronLeft } from 'lucide-react'
 import { useCartStore } from '@/store/useCartStore'
-import { useProductStore } from '@/store/useProductStore'
-import { useWebsiteStore, resolveTariff } from '@/store/useWebsiteStore'
-import { useOrderStore, priceOrder } from '@/store/useOrderStore'
+import { resolveTariff } from '@/store/useWebsiteStore'
+import { priceOrder } from '@/store/useOrderStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { WILAYAS, WILAYA_BY_CODE } from '@/data/algeria'
 import { formatMoney, sortSizes } from '@/utils/helpers'
-import { usePublishedProduct, useLiveOffer, useShopIdentity } from './useShopData'
+import * as db from '@/lib/db'
+import {
+  usePublishedProduct,
+  usePublishedProducts,
+  useLiveOffer,
+  useShopIdentity,
+  useShopStore,
+} from './useShopData'
 import { offerToCart } from './ShopOffers'
 import type { CartItem, DeliveryMode } from '@/types'
 import { clsx } from '@/utils/clsx'
@@ -22,11 +28,10 @@ export const ShopOrder = () => {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const identity = useShopIdentity()
-  const products = useProductStore((s) => s.products)
-  const companies = useWebsiteStore((s) => s.companies)
+  const products = usePublishedProducts()
+  const companies = useShopStore((s) => s.companies)
   const cartItems = useCartStore((s) => s.items)
   const clearCart = useCartStore((s) => s.clear)
-  const addOrder = useOrderStore((s) => s.addOrder)
 
   const directProduct = usePublishedProduct(params.get('product'))
   const directOffer = useLiveOffer(params.get('offer'))
@@ -116,38 +121,42 @@ export const ShopOrder = () => {
   }
   const invalid = Object.values(errors).some(Boolean)
 
-  const submit = () => {
+  const submit = async () => {
     setTouched(true)
     if (invalid) {
       toast.error(t('required'))
       return
     }
+
     setSaving(true)
-    const order = addOrder({
-      customerName: name.trim(),
-      phone: phone.trim(),
-      wilayaCode,
-      wilaya: WILAYA_BY_CODE[wilayaCode]?.name ?? '',
-      commune,
-      address: address.trim(),
-      deliveryMode: mode,
-      deliveryCompanyId: company?.id ?? null,
-      deliveryCompanyName: company?.name ?? '',
-      deliveryPrice: delivery,
-      lines: items.map((i) => ({
-        productId: i.productId,
-        productName: i.productName,
-        size: i.size,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-        image: i.image,
-        offerId: i.offerId,
-        offerTitle: i.offerTitle,
-      })),
-      note: note.trim(),
-    })
-    if (fromCart) clearCart()
-    navigate(`/shop/thank-you/${order.id}`, { replace: true })
+    try {
+      // `place_web_order` is the shopper's only write. It re-reads every line's
+      // price from the catalogue or the live campaign and the carrier fee from
+      // the tariff grid, so what the browser shows is a quote and what the
+      // boutique records is the database's own arithmetic. The totals above
+      // are the same calculation, which is why the two agree.
+      const order = await db.placeOrder({
+        customerName: name.trim(),
+        phone: phone.trim(),
+        wilayaCode,
+        commune,
+        address: address.trim(),
+        mode,
+        companyId: company?.id ?? null,
+        lines: items.map((i) => ({
+          productId: i.productId,
+          size: i.size,
+          quantity: i.quantity,
+          offerId: i.offerId,
+        })),
+        note: note.trim(),
+      })
+      if (fromCart) clearCart()
+      navigate(`/shop/thank-you/${order.id}`, { replace: true })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+      setSaving(false)
+    }
   }
 
   const field =
@@ -192,7 +201,7 @@ export const ShopOrder = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            submit()
+            void submit()
           }}
           className="space-y-8"
         >
@@ -478,7 +487,7 @@ export const ShopOrder = () => {
 
             <div className="border-t border-wood-light p-5">
               <button
-                onClick={submit}
+                onClick={() => void submit()}
                 disabled={saving}
                 className="flex w-full items-center justify-center gap-2 bg-wood-btn px-6 py-4 text-[11px] font-black uppercase tracking-widest text-accentfg transition hover:opacity-85 disabled:opacity-50"
               >

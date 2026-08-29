@@ -34,9 +34,9 @@ const lineKey = (productId: string, size: string) => `${productId}::${size}`
 export const POSPage = () => {
   const { t } = useTranslation()
   const products = useProductStore((s) => s.products)
-  const reduceStock = useProductStore((s) => s.reduceStock)
   const { clients, addClient } = useClientStore()
   const addSale = useSalesStore((s) => s.addSale)
+  const [saving, setSaving] = useState(false)
 
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
@@ -157,21 +157,25 @@ export const POSPage = () => {
     setReceived(0)
   }
 
-  const handleNewClient = () => {
+  const handleNewClient = async () => {
     if (!newClient.name.trim()) {
       toast.error(t('required'))
       return
     }
-    const created = addClient({ name: newClient.name, phone: newClient.phone })
-    setClient(created)
-    setWalkIn(false)
-    setShowNewClient(false)
-    setNewClient({ name: '', phone: '' })
+    try {
+      const created = await addClient({ name: newClient.name, phone: newClient.phone })
+      setClient(created)
+      setWalkIn(false)
+      setShowNewClient(false)
+      setNewClient({ name: '', phone: '' })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    }
   }
 
   const creditBlocked = rest > 0 && !client
 
-  const validate = () => {
+  const validate = async () => {
     if (cart.length === 0) {
       toast.error(t('emptyCart'))
       return
@@ -180,24 +184,31 @@ export const POSPage = () => {
       toast.error(t('selectClientForCredit'))
       return
     }
+
     const lines: SaleLine[] = cart.map(({ stock, ...l }) => l) // eslint-disable-line @typescript-eslint/no-unused-vars
     const paid = round2(Math.min(received, total))
     const nowIso = new Date().toISOString()
-    addSale({
-      clientId: client?.id ?? null,
-      clientName: client?.name ?? t('walkInClient'),
-      lines,
-      subtotal,
-      discount: discountOn ? discount : 0,
-      total,
-      paid,
-      payments: paid > 0 ? [{ id: `p-${Date.now()}`, amount: paid, date: nowIso, note: 'Encaissement' }] : [],
-      date: nowIso,
-    })
-    // Stock comes off the exact size that was sold.
-    lines.forEach((l) => reduceStock(l.productId, l.size, l.quantity))
-    toast.success(t('saleValidated'))
-    resetSale()
+
+    setSaving(true)
+    try {
+      // The reference, the totals and the stock movement are all derived in the
+      // database from these lines, so the till sends them and nothing else —
+      // decrementing the stock here as well would take the units out twice.
+      await addSale({
+        clientId: client?.id ?? null,
+        clientName: client?.name ?? t('walkInClient'),
+        lines,
+        discount: discountOn ? discount : 0,
+        payments: paid > 0 ? [{ amount: paid, date: nowIso, note: 'Encaissement' }] : [],
+        date: nowIso,
+      })
+      toast.success(t('saleValidated'))
+      resetSale()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -497,9 +508,9 @@ export const POSPage = () => {
                 variant={creditBlocked ? 'outline' : 'primary'}
                 size="lg"
                 className="w-full"
-                disabled={creditBlocked || cart.length === 0}
+                disabled={creditBlocked || cart.length === 0 || saving}
                 title={creditBlocked ? t('selectClientForCredit') : undefined}
-                onClick={validate}
+                onClick={() => void validate()}
               >
                 <IconSave size={18} />
                 {t('validateSale')}

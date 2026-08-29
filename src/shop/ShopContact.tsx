@@ -12,10 +12,9 @@ import {
   Clock,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useWebsiteStore } from '@/store/useWebsiteStore'
-import { useSettingsStore } from '@/store/useSettingsStore'
+
 import { useTranslation } from '@/i18n/useTranslation'
-import { useShopIdentity } from './useShopData'
+import { useShopContacts, useShopIdentity } from './useShopData'
 
 interface Channel {
   label: string
@@ -27,8 +26,7 @@ interface Channel {
 
 export const ShopContact = () => {
   const { t } = useTranslation()
-  const contacts = useWebsiteStore((s) => s.contacts)
-  const settings = useSettingsStore((s) => s.settings)
+  const contacts = useShopContacts()
   const identity = useShopIdentity()
 
   const digits = (v: string) => v.replace(/\D/g, '')
@@ -161,7 +159,7 @@ export const ShopContact = () => {
             </section>
           )}
 
-          {(contacts.mapsUrl || settings.address) && (
+          {(contacts.mapsUrl || identity.address) && (
             <section>
               <h2 className="eyebrow mb-3">{t('address')}</h2>
               <div className="border border-wood-light p-6">
@@ -170,8 +168,8 @@ export const ShopContact = () => {
                     <MapPin size={18} />
                   </span>
                   <div className="min-w-0">
-                    {settings.address && (
-                      <p className="text-sm font-medium text-wood-dark">{settings.address}</p>
+                    {identity.address && (
+                      <p className="text-sm font-medium text-wood-dark">{identity.address}</p>
                     )}
                     {contacts.mapsUrl && (
                       <a

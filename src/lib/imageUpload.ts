@@ -2,16 +2,19 @@
 // Picked image → compressed file → storage bucket
 // ----------------------------------------------------------------------------
 // One function sits between every image input in the app and where the bytes
-// end up. It always compresses (see `@/utils/media`), then decides where the
-// result lives:
+// end up. It always compresses (see `@/utils/media`), then pushes the result
+// into its bucket and hands back the public URL — so the row carries ~100
+// characters instead of a 700 KB base64 blob, and the storefront serves the
+// picture straight from the CDN.
 //
-//   • Supabase configured and reachable → the compressed file is pushed to its
-//     bucket and the app stores the public URL. The IndexedDB row then carries
-//     ~100 characters instead of a 700 KB base64 blob, so backups stay small
-//     and the storefront serves images straight from the CDN.
-//   • Otherwise → the compressed data URL is stored, exactly as before. The
-//     boutique is local-first: a network outage must never block a sale, so an
-//     upload failure degrades silently instead of throwing.
+// A failed upload *throws*. It used to fall back to storing the data URL, which
+// meant a refused policy or a dropped connection quietly wrote a megabyte of
+// base64 into the database and nobody found out until the table was too big to
+// query. The caller shows the error and the user picks the file again.
+//
+// With no Supabase configured at all there is no bucket to write to, so the
+// compressed data URL is returned as before — that path exists only so a
+// checkout without an `.env` still renders.
 //
 // An object is *never* overwritten in place. Every upload gets its own random
 // name, for two reasons:
@@ -121,30 +124,26 @@ export const uploadImage = async (
     size: compressed.size,
   }
 
+  // No project configured, or a caller that deliberately wants bytes only.
   if (!supabase || !bucket) {
     onProgress?.(100)
     return local
   }
 
-  try {
-    const path = objectPath({ bucket, folder }, compressed.file)
-    const { error } = await supabase.storage.from(bucket).upload(path, compressed.file, {
-      contentType: compressed.file.type,
-      // The name is unique, so the object is immutable: cache it for a year.
-      cacheControl: '31536000',
-      upsert: false,
-    })
-    if (error) throw error
+  const path = objectPath({ bucket, folder }, compressed.file)
+  const { error } = await supabase.storage.from(bucket).upload(path, compressed.file, {
+    contentType: compressed.file.type,
+    // The name is unique, so the object is immutable: cache it for a year.
+    cacheControl: '31536000',
+    upsert: false,
+  })
+  // Offline, bucket missing, or the account lacks the write permission — all
+  // of which the user needs to hear about rather than discover later.
+  if (error) throw new Error(error.message)
 
-    const { publicUrl } = supabase.storage.from(bucket).getPublicUrl(path).data
-    onProgress?.(100)
-    return { ...local, src: publicUrl, remote: true }
-  } catch {
-    // Offline, bucket missing, or the account lacks the write permission. The
-    // compressed image still goes into the local database.
-    onProgress?.(100)
-    return local
-  }
+  const { publicUrl } = supabase.storage.from(bucket).getPublicUrl(path).data
+  onProgress?.(100)
+  return { ...local, src: publicUrl, remote: true }
 }
 
 /** Compress and upload a whole picked list, in order, skipping non-images. */

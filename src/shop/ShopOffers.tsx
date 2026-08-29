@@ -4,10 +4,15 @@ import toast from 'react-hot-toast'
 import { ChevronLeft, ImageOff, Zap, ShoppingBag, Tag } from 'lucide-react'
 import { Countdown } from '@/components/shared/Countdown'
 import { useCartStore } from '@/store/useCartStore'
-import { useProductStore } from '@/store/useProductStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney, sortSizes } from '@/utils/helpers'
-import { useLiveOffers, useLiveOffer, useShopIdentity } from './useShopData'
+import {
+  useLiveOffers,
+  useLiveOffer,
+  usePublishedProducts,
+  useShopIdentity,
+  type ShopProduct,
+} from './useShopData'
 import { isOfferLive } from '@/store/useWebsiteStore'
 import type { CartItem, SpecialOffer } from '@/types'
 
@@ -23,7 +28,7 @@ import type { CartItem, SpecialOffer } from '@/types'
  */
 export const offerToCart = (
   offer: SpecialOffer,
-  products: ReturnType<typeof useProductStore.getState>['products'],
+  products: ShopProduct[],
 ): CartItem[] =>
   offer.lines.map((l) => {
     const product = products.find((p) => p.id === l.productId)
@@ -149,7 +154,7 @@ export const ShopOfferDetail = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const offer = useLiveOffer(id)
-  const products = useProductStore((s) => s.products)
+  const products = usePublishedProducts()
   const add = useCartStore((s) => s.add)
   const identity = useShopIdentity()
 

@@ -1,20 +1,23 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type {
   CommunePrice,
   ContactLinks,
   DeliveryCompany,
-  OfferLine,
   SpecialOffer,
   WebProductMeta,
   WebsiteSettings,
 } from '@/types'
-import { uid, round2 } from '@/utils/helpers'
-import { idbStorage, onRehydrate, storeKey } from './persist'
+import { round2 } from '@/utils/helpers'
+import * as db from '@/lib/db'
 
+// ============================================================================
+// The storefront's configuration
 // ----------------------------------------------------------------------------
-// Defaults
-// ----------------------------------------------------------------------------
+// Catalogue exposure, campaigns, carriers and their tariff grid, the contact
+// block and the site's dressing — all rows in Supabase. The offer discounts are
+// recomputed by `recalc_offer_totals()` after every line change, so `priceOffer`
+// below is only used to preview a draft before it is saved.
+// ============================================================================
 
 const EMPTY_CONTACTS: ContactLinks = {
   facebook: '',
@@ -36,9 +39,9 @@ const DEFAULT_SITE: WebsiteSettings = {
   freeShippingFrom: 0,
 }
 
-/** Recompute the money on an offer from its lines — the single source of truth. */
+/** Preview the money on an offer draft; the saved figures come from the database. */
 export const priceOffer = (
-  lines: OfferLine[],
+  lines: SpecialOffer['lines'],
 ): Pick<SpecialOffer, 'originalTotal' | 'offerTotal' | 'discountAmount' | 'discountPercent'> => {
   const originalTotal = round2(lines.reduce((s, l) => s + l.originalPrice * l.quantity, 0))
   const offerTotal = round2(lines.reduce((s, l) => s + l.offerPrice * l.quantity, 0))
@@ -50,10 +53,6 @@ export const priceOffer = (
 /** The key a tariff is filed under. */
 export const priceKey = (wilayaCode: string, commune: string): string => `${wilayaCode}::${commune}`
 
-// ----------------------------------------------------------------------------
-// Store
-// ----------------------------------------------------------------------------
-
 interface WebsiteState {
   /** Storefront overrides per article, keyed by product id. */
   webProducts: Record<string, WebProductMeta>
@@ -61,31 +60,34 @@ interface WebsiteState {
   companies: DeliveryCompany[]
   contacts: ContactLinks
   site: WebsiteSettings
+  loading: boolean
+
+  load: () => Promise<void>
 
   // ── Catalogue ────────────────────────────────────────────────────────────
   /** `true` unless the owner has explicitly hidden the article. */
   isPublished: (productId: string) => boolean
-  toggleProduct: (productId: string) => void
-  setProductMeta: (productId: string, patch: Partial<Omit<WebProductMeta, 'productId'>>) => void
+  toggleProduct: (productId: string) => Promise<void>
+  setProductMeta: (
+    productId: string,
+    patch: Partial<Omit<WebProductMeta, 'productId'>>,
+  ) => Promise<void>
 
   // ── Offers ───────────────────────────────────────────────────────────────
-  addOffer: (
-    data: Omit<
-      SpecialOffer,
-      'id' | 'createdAt' | 'originalTotal' | 'offerTotal' | 'discountAmount' | 'discountPercent'
-    >,
-  ) => SpecialOffer
-  updateOffer: (id: string, data: Partial<SpecialOffer>) => void
-  deleteOffer: (id: string) => void
-  toggleOffer: (id: string) => void
+  addOffer: (data: Partial<SpecialOffer>) => Promise<SpecialOffer>
+  updateOffer: (id: string, data: Partial<SpecialOffer>) => Promise<void>
+  deleteOffer: (id: string) => Promise<void>
+  toggleOffer: (id: string) => Promise<void>
 
   // ── Delivery ─────────────────────────────────────────────────────────────
-  addCompany: (data: Pick<DeliveryCompany, 'name' | 'phone' | 'logo' | 'notes'>) => DeliveryCompany
-  updateCompany: (id: string, data: Partial<DeliveryCompany>) => void
-  deleteCompany: (id: string) => void
-  toggleCompany: (id: string) => void
+  addCompany: (
+    data: Pick<DeliveryCompany, 'name' | 'phone' | 'logo' | 'notes'>,
+  ) => Promise<DeliveryCompany>
+  updateCompany: (id: string, data: Partial<DeliveryCompany>) => Promise<void>
+  deleteCompany: (id: string) => Promise<void>
+  toggleCompany: (id: string) => Promise<void>
   /** Write one commune's tariff. */
-  setCommunePrice: (companyId: string, price: CommunePrice) => void
+  setCommunePrice: (companyId: string, price: CommunePrice) => Promise<void>
   /** Write the same tariff across a whole wilaya in one gesture. */
   setWilayaPrices: (
     companyId: string,
@@ -94,162 +96,163 @@ interface WebsiteState {
     home: number,
     desk: number,
     enabled: boolean,
-  ) => void
-  clearWilayaPrices: (companyId: string, wilayaCode: string) => void
+  ) => Promise<void>
+  clearWilayaPrices: (companyId: string, wilayaCode: string) => Promise<void>
 
   // ── Identity ─────────────────────────────────────────────────────────────
-  updateContacts: (data: Partial<ContactLinks>) => void
-  updateSite: (data: Partial<WebsiteSettings>) => void
+  updateContacts: (data: Partial<ContactLinks>) => Promise<void>
+  updateSite: (data: Partial<WebsiteSettings>) => Promise<void>
 }
 
-export const useWebsiteStore = create<WebsiteState>()(
-  persist(
-    (set, get) => ({
-      webProducts: {},
-      offers: [],
-      companies: [],
-      contacts: EMPTY_CONTACTS,
-      site: DEFAULT_SITE,
+export const useWebsiteStore = create<WebsiteState>()((set, get) => ({
+  webProducts: {},
+  offers: [],
+  companies: [],
+  contacts: EMPTY_CONTACTS,
+  site: DEFAULT_SITE,
+  loading: false,
 
-      // ── Catalogue ──────────────────────────────────────────────────────────
-      isPublished: (productId) => !get().webProducts[productId]?.hidden,
+  load: async () => {
+    set({ loading: true })
+    try {
+      const [webProducts, offers, companies, contacts, site] = await Promise.all([
+        db.fetchWebProducts(),
+        db.fetchOffers(),
+        db.fetchDeliveryCompanies(),
+        db.fetchContacts(),
+        db.fetchWebsiteSettings(),
+      ])
+      set({
+        webProducts,
+        offers,
+        companies,
+        contacts: contacts ?? EMPTY_CONTACTS,
+        site: site ?? DEFAULT_SITE,
+      })
+    } finally {
+      set({ loading: false })
+    }
+  },
 
-      toggleProduct: (productId) =>
-        set((s) => {
-          const cur = s.webProducts[productId]
-          return {
-            webProducts: {
-              ...s.webProducts,
-              [productId]: {
-                productId,
-                webPrice: cur?.webPrice,
-                featured: cur?.featured,
-                hidden: !cur?.hidden,
-                updatedAt: new Date().toISOString(),
-              },
-            },
-          }
-        }),
+  // ── Catalogue ──────────────────────────────────────────────────────────────
+  isPublished: (productId) => !get().webProducts[productId]?.hidden,
 
-      setProductMeta: (productId, patch) =>
-        set((s) => {
-          const cur = s.webProducts[productId]
-          return {
-            webProducts: {
-              ...s.webProducts,
-              [productId]: {
-                productId,
-                hidden: cur?.hidden ?? false,
-                webPrice: cur?.webPrice,
-                featured: cur?.featured,
-                ...patch,
-                updatedAt: new Date().toISOString(),
-              },
-            },
-          }
-        }),
+  toggleProduct: async (productId) => {
+    const current = get().webProducts[productId]
+    const meta = await db.saveWebProduct(productId, { hidden: !current?.hidden })
+    set((s) => ({ webProducts: { ...s.webProducts, [productId]: meta } }))
+  },
 
-      // ── Offers ─────────────────────────────────────────────────────────────
-      addOffer: (data) => {
-        const offer: SpecialOffer = {
-          ...data,
-          ...priceOffer(data.lines),
-          id: uid('offer'),
-          createdAt: new Date().toISOString(),
-        }
-        set((s) => ({ offers: [offer, ...s.offers] }))
-        return offer
-      },
+  setProductMeta: async (productId, patch) => {
+    const meta = await db.saveWebProduct(productId, patch)
+    set((s) => ({ webProducts: { ...s.webProducts, [productId]: meta } }))
+  },
 
-      updateOffer: (id, data) =>
-        set((s) => ({
-          offers: s.offers.map((o) => {
-            if (o.id !== id) return o
-            const merged = { ...o, ...data }
-            // Money is derived, never trusted from the caller.
-            return { ...merged, ...priceOffer(merged.lines) }
-          }),
-        })),
+  // ── Offers ─────────────────────────────────────────────────────────────────
+  addOffer: async (data) => {
+    const offer = await db.createOffer(data)
+    set((s) => ({ offers: [offer, ...s.offers] }))
+    return offer
+  },
 
-      deleteOffer: (id) => set((s) => ({ offers: s.offers.filter((o) => o.id !== id) })),
+  updateOffer: async (id, data) => {
+    const offer = await db.updateOffer(id, data)
+    set((s) => ({ offers: s.offers.map((o) => (o.id === id ? offer : o)) }))
+  },
 
-      toggleOffer: (id) =>
-        set((s) => ({
-          offers: s.offers.map((o) => (o.id === id ? { ...o, active: !o.active } : o)),
-        })),
+  deleteOffer: async (id) => {
+    await db.deleteOffer(id)
+    set((s) => ({ offers: s.offers.filter((o) => o.id !== id) }))
+  },
 
-      // ── Delivery ───────────────────────────────────────────────────────────
-      addCompany: (data) => {
-        const company: DeliveryCompany = {
-          ...data,
-          id: uid('dlv'),
-          active: true,
-          prices: {},
-          createdAt: new Date().toISOString(),
-        }
-        set((s) => ({ companies: [company, ...s.companies] }))
-        return company
-      },
+  toggleOffer: async (id) => {
+    const current = get().offers.find((o) => o.id === id)
+    if (!current) return
+    const offer = await db.updateOffer(id, { active: !current.active })
+    set((s) => ({ offers: s.offers.map((o) => (o.id === id ? offer : o)) }))
+  },
 
-      updateCompany: (id, data) =>
-        set((s) => ({ companies: s.companies.map((c) => (c.id === id ? { ...c, ...data } : c)) })),
+  // ── Delivery ───────────────────────────────────────────────────────────────
+  addCompany: async (data) => {
+    const company = await db.createDeliveryCompany(data)
+    set((s) => ({ companies: [company, ...s.companies] }))
+    return company
+  },
 
-      deleteCompany: (id) => set((s) => ({ companies: s.companies.filter((c) => c.id !== id) })),
+  updateCompany: async (id, data) => {
+    await db.updateDeliveryCompany(id, data)
+    set((s) => ({ companies: s.companies.map((c) => (c.id === id ? { ...c, ...data } : c)) }))
+  },
 
-      toggleCompany: (id) =>
-        set((s) => ({
-          companies: s.companies.map((c) => (c.id === id ? { ...c, active: !c.active } : c)),
-        })),
+  deleteCompany: async (id) => {
+    await db.deleteDeliveryCompany(id)
+    set((s) => ({ companies: s.companies.filter((c) => c.id !== id) }))
+  },
 
-      setCommunePrice: (companyId, price) =>
-        set((s) => ({
-          companies: s.companies.map((c) =>
-            c.id === companyId ? { ...c, prices: { ...c.prices, [price.key]: price } } : c,
-          ),
-        })),
+  toggleCompany: async (id) => {
+    const current = get().companies.find((c) => c.id === id)
+    if (!current) return
+    await db.updateDeliveryCompany(id, { active: !current.active })
+    set((s) => ({
+      companies: s.companies.map((c) => (c.id === id ? { ...c, active: !current.active } : c)),
+    }))
+  },
 
-      setWilayaPrices: (companyId, wilayaCode, communes, home, desk, enabled) =>
-        set((s) => ({
-          companies: s.companies.map((c) => {
-            if (c.id !== companyId) return c
-            const prices = { ...c.prices }
-            communes.forEach((commune) => {
-              const key = priceKey(wilayaCode, commune)
-              prices[key] = { key, wilayaCode, commune, home, desk, enabled }
-            })
-            return { ...c, prices }
-          }),
-        })),
+  setCommunePrice: async (companyId, price) => {
+    await db.saveDeliveryPrices(companyId, [price])
+    set((s) => ({
+      companies: s.companies.map((c) =>
+        c.id === companyId ? { ...c, prices: { ...c.prices, [price.key]: price } } : c,
+      ),
+    }))
+  },
 
-      clearWilayaPrices: (companyId, wilayaCode) =>
-        set((s) => ({
-          companies: s.companies.map((c) => {
-            if (c.id !== companyId) return c
-            const prices = Object.fromEntries(
-              Object.entries(c.prices).filter(([, p]) => p.wilayaCode !== wilayaCode),
-            )
-            return { ...c, prices }
-          }),
-        })),
-
-      // ── Identity ───────────────────────────────────────────────────────────
-      updateContacts: (data) => set((s) => ({ contacts: { ...s.contacts, ...data } })),
-      updateSite: (data) => set((s) => ({ site: { ...s.site, ...data } })),
-    }),
-    {
-      name: storeKey('website'),
-      storage: idbStorage(),
-      partialize: (s) => ({
-        webProducts: s.webProducts,
-        offers: s.offers,
-        companies: s.companies,
-        contacts: s.contacts,
-        site: s.site,
+  setWilayaPrices: async (companyId, wilayaCode, communes, home, desk, enabled) => {
+    const prices: CommunePrice[] = communes.map((commune) => ({
+      key: priceKey(wilayaCode, commune),
+      wilayaCode,
+      commune,
+      home,
+      desk,
+      enabled,
+    }))
+    await db.saveDeliveryPrices(companyId, prices)
+    set((s) => ({
+      companies: s.companies.map((c) => {
+        if (c.id !== companyId) return c
+        const next = { ...c.prices }
+        prices.forEach((p) => {
+          next[p.key] = p
+        })
+        return { ...c, prices: next }
       }),
-      onRehydrateStorage: onRehydrate('website'),
-    },
-  ),
-)
+    }))
+  },
+
+  clearWilayaPrices: async (companyId, wilayaCode) => {
+    await db.clearDeliveryPrices(companyId, wilayaCode)
+    set((s) => ({
+      companies: s.companies.map((c) => {
+        if (c.id !== companyId) return c
+        const prices = Object.fromEntries(
+          Object.entries(c.prices).filter(([, p]) => p.wilayaCode !== wilayaCode),
+        )
+        return { ...c, prices }
+      }),
+    }))
+  },
+
+  // ── Identity ───────────────────────────────────────────────────────────────
+  updateContacts: async (data) => {
+    await db.saveContacts(data)
+    set((s) => ({ contacts: { ...s.contacts, ...data } }))
+  },
+
+  updateSite: async (data) => {
+    await db.saveWebsiteSettings(data)
+    set((s) => ({ site: { ...s.site, ...data } }))
+  },
+}))
 
 // ----------------------------------------------------------------------------
 // Derived helpers — shared by the dashboard and the storefront

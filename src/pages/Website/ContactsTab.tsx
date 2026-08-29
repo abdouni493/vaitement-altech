@@ -19,6 +19,7 @@ import { useWebsiteStore } from '@/store/useWebsiteStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import type { TranslationKey } from '@/i18n/translations'
 import type { ContactLinks } from '@/types'
+import { commit } from '@/utils/mutate'
 
 interface Row {
   key: keyof ContactLinks
@@ -52,10 +53,7 @@ export const ContactsTab = () => {
 
   const dirty = ROWS.some((r) => (draft[r.key] ?? '') !== (contacts[r.key] ?? ''))
 
-  const save = () => {
-    updateContacts(draft)
-    toast.success(t('saved'))
-  }
+  const save = () => commit(updateContacts(draft), { success: t('saved') })
 
   return (
     <div className="max-w-3xl">

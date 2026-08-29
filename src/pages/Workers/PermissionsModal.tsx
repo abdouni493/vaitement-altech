@@ -8,6 +8,7 @@ import { NAV_ITEMS } from '@/components/layout/navConfig'
 import { useWorkerStore } from '@/store/useWorkerStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import type { Worker, Permissions, ActionKey, ModuleKey } from '@/types'
+import { commit } from '@/utils/mutate'
 
 const ACTIONS: ActionKey[] = ['view', 'create', 'edit', 'delete', 'print', 'pay']
 
@@ -34,8 +35,7 @@ export const PermissionsModal = ({ open, onClose, worker }: { open: boolean; onC
     })
 
   const save = () => {
-    setPermissions(worker.id, perms)
-    toast.success(t('saved'))
+    commit(setPermissions(worker.id, perms), { success: t('saved') })
     onClose()
   }
 

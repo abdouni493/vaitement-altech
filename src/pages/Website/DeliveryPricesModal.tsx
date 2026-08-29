@@ -11,6 +11,7 @@ import { WILAYAS, TOTAL_COMMUNES } from '@/data/algeria'
 import { formatMoney } from '@/utils/helpers'
 import { clsx } from '@/utils/clsx'
 import type { DeliveryCompany } from '@/types'
+import { commit } from '@/utils/mutate'
 
 interface Props {
   open: boolean
@@ -64,15 +65,17 @@ export const DeliveryPricesModal = ({ open, onClose, company }: Props) => {
     if (!company || !wilaya) return
     const home = Number(bulkHome) || 0
     const desk = Number(bulkDesk) || 0
-    setWilayaPrices(
-      company.id,
-      wilaya.code,
-      wilaya.communes.map((c) => c.name),
-      home,
-      desk,
-      true,
+    commit(
+      setWilayaPrices(
+        company.id,
+        wilaya.code,
+        wilaya.communes.map((c) => c.name),
+        home,
+        desk,
+        true,
+      ),
+      { success: `${t('pricesSaved')} — ${wilaya.name} (${wilaya.communes.length})` },
     )
-    toast.success(`${t('pricesSaved')} — ${wilaya.name} (${wilaya.communes.length})`)
   }
 
   const patch = (commune: string, field: 'home' | 'desk' | 'enabled', value: number | boolean) => {
@@ -89,7 +92,7 @@ export const DeliveryPricesModal = ({ open, onClose, company }: Props) => {
     const next = { ...cur, [field]: value }
     // Typing a price is itself the act of serving the commune.
     if (field !== 'enabled' && Number(value) > 0) next.enabled = true
-    setCommunePrice(company.id, next)
+    commit(setCommunePrice(company.id, next))
   }
 
   return (
@@ -221,8 +224,7 @@ export const DeliveryPricesModal = ({ open, onClose, company }: Props) => {
                 variant="outline"
                 onClick={() => {
                   if (company && wilaya) {
-                    clearWilayaPrices(company.id, wilaya.code)
-                    toast.success(t('saved'))
+                    commit(clearWilayaPrices(company.id, wilaya.code), { success: t('saved') })
                   }
                 }}
               >

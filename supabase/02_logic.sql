@@ -34,6 +34,25 @@ as $$
 $$;
 
 /**
+ * Does the boutique already have an owner?
+ *
+ * The login screen asks this before anyone has signed in, so it has to answer
+ * for `anon` — hence security definer. It returns a single boolean and never
+ * the row itself, so an anonymous visitor learns that the boutique is claimed
+ * and nothing else about the account.
+ *
+ * This is what retires the "create administrator" button: `handle_new_user`
+ * makes the first account the owner whatever the metadata says, so once this
+ * returns true the flow can never produce a second one.
+ */
+create or replace function public.admin_exists()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (select 1 from public.profiles where is_admin);
+$$;
+
+/**
  * The single gate every staff-facing policy goes through.
  *
  * The owner passes everything. A worker passes only when the module is enabled
@@ -762,6 +781,52 @@ begin
   select * into o from public.web_orders where id = o.id;
   return o;
 end;
+$$;
+
+/**
+ * One order, as the customer who placed it may see it.
+ *
+ * The `web_orders` policies are staff-only, so the confirmation page — which a
+ * shopper reaches by a copied link and after a refresh — has no way to read the
+ * row it just created. This returns exactly what that page renders and nothing
+ * more: no internal timestamps, no event log, no other order. The id is a
+ * random uuid, so knowing one tells you nothing about any other.
+ */
+create or replace function public.web_order_receipt(o_id uuid)
+returns jsonb
+language sql stable security definer set search_path = public
+as $$
+  select jsonb_build_object(
+    'id',                    o.id,
+    'reference',             o.reference,
+    'customer_name',         o.customer_name,
+    'phone',                 o.phone,
+    'wilaya',                o.wilaya,
+    'wilaya_code',           o.wilaya_code,
+    'commune',               o.commune,
+    'address',               o.address,
+    'delivery_mode',         o.delivery_mode,
+    'delivery_company_name', o.delivery_company_name,
+    'delivery_price',        o.delivery_price,
+    'subtotal',              o.subtotal,
+    'total',                 o.total,
+    'status',                o.status,
+    'note',                  o.note,
+    'created_at',            o.created_at,
+    'web_order_lines', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+          'product_id',   l.product_id,
+          'product_name', l.product_name,
+          'size',         l.size,
+          'quantity',     l.quantity,
+          'unit_price',   l.unit_price,
+          'offer_title',  l.offer_title,
+          'image_path',   l.image_path))
+         from public.web_order_lines l where l.order_id = o.id),
+      '[]'::jsonb)
+  )
+  from public.web_orders o
+  where o.id = o_id;
 $$;
 
 -- ============================================================================

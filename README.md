@@ -18,8 +18,13 @@ npm run dev        # http://localhost:5177
 
 Autres scripts : `npm run build`, `npm run preview`, `npm run typecheck`.
 
-Au premier lancement, la page de connexion propose **Créer un compte
-administrateur**. Le bouton disparaît définitivement dès que ce compte existe.
+Le SQL de `supabase/` doit être exécuté **avant** le premier lancement — voir
+[`supabase/README.md`](supabase/README.md). Sans lui, la page de connexion
+affiche l'erreur renvoyée par le projet au lieu d'un formulaire inutilisable.
+
+Ensuite, la page de connexion propose **Créer un compte administrateur**. Le
+compte est créé dans `auth.users`, et le bouton disparaît définitivement dès
+que la fonction `admin_exists()` répond « oui ».
 
 ---
 
@@ -95,16 +100,33 @@ d'alerte sur la barre latérale pour les commandes en attente.
 
 ## Données
 
-L'application est **locale d'abord** : chaque écran lit et écrit une base
-IndexedDB sur l'appareil, donc la boutique fonctionne sans réseau.
+**Supabase est la seule source de vérité.** Chaque écran lit ce que la base
+contient et chaque enregistrement y retourne ; rien n'est conservé sur
+l'appareil. Les magasins Zustand de `src/store` ne sont qu'un cache de ce que
+`src/lib/db.ts` a lu en dernier, vidé à la déconnexion.
 
-`supabase/` contient le schéma complet destiné au backend partagé — 36 tables,
-les fonctions du cycle de vie des commandes, la sécurité au niveau des lignes,
-les buckets d'images et les 58 wilayas avec leurs communes. Voir
-[`supabase/README.md`](supabase/README.md) pour l'ordre d'exécution.
+Deux exceptions assumées, parce qu'aucune table ne les réclame : le **thème**
+(une préférence d'affichage) et le **panier** de la vitrine — celui d'un
+visiteur anonyme, sur un seul appareil, qui ne devient une commande qu'au
+passage en caisse. Les deux vivent dans le `localStorage` du navigateur.
 
-L'authentification est déjà branchée : la connexion tente Supabase en premier et
-retombe sur les comptes locaux si le projet est injoignable.
+La base **dérive tout ce qu'elle peut** : les totaux d'un document, le statut de
+paiement, les niveaux de stock, les références `ACH-…` / `VTE-…` / `WEB-…` et les
+remises d'une offre viennent de déclencheurs SQL. L'application envoie donc les
+*faits* — les lignes, les règlements — puis relit la ligne, au lieu de calculer
+un total dans le navigateur en espérant que les deux concordent. C'est aussi
+pourquoi le point de vente ne décrémente plus le stock lui-même : la ligne de
+vente s'en charge côté base.
+
+`supabase/` contient le schéma complet — 36 tables, les fonctions du cycle de vie
+des commandes, la sécurité au niveau des lignes, les buckets d'images et les 58
+wilayas avec leurs communes. Voir [`supabase/README.md`](supabase/README.md)
+pour l'ordre d'exécution.
+
+L'authentification est entièrement Supabase : les comptes sont des lignes
+`auth.users`, leur rôle et leur matrice de permissions vivent dans
+`public.profiles`. Il n'y a plus de liste de comptes locale ni de vérification
+de mot de passe de secours.
 
 ### Configuration
 
@@ -158,14 +180,14 @@ qui ne touche jamais à une image.
 
 **Où finissent les octets :**
 
-- **Supabase configuré et joignable** → le fichier compressé part dans son
-  bucket et l'application ne garde que l'URL publique. La ligne IndexedDB porte
-  alors ~100 caractères au lieu d'un blob base64 de 700 Ko : les sauvegardes
-  restent légères et la vitrine sert ses images depuis le CDN.
-- **Sinon** → l'URL de données compressée est stockée localement, exactement
-  comme avant. La boutique est **locale d'abord** : une coupure réseau ne doit
-  jamais bloquer une vente, donc un échec d'envoi se dégrade en silence au lieu
-  de lever une erreur.
+Le fichier compressé part dans son bucket et l'application ne garde que l'URL
+publique. La ligne porte alors ~100 caractères au lieu d'un blob base64 de
+700 Ko : la table reste légère et la vitrine sert ses images depuis le CDN.
+
+Un envoi qui échoue **lève une erreur** et l'utilisateur la voit. Auparavant il
+retombait en silence sur l'URL de données, ce qui écrivait tranquillement un
+mégaoctet de base64 dans la base à chaque politique refusée ou coupure réseau —
+et personne ne s'en apercevait avant que la table ne soit trop lourde.
 
 Les formats vectoriels (SVG, ICO) et les fichiers déjà plus légers que la cible
 sont conservés octet pour octet — il n'y a plus rien à gagner, seulement du
@@ -188,8 +210,8 @@ liste ce que contient chaque bucket, en retire tout ce que la boutique référen
 encore, et supprime le reste. Deux garde-fous évitent qu'elle touche une image
 vivante — rien de plus récent que **24 h** n'est supprimé (un formulaire peut
 être ouvert avec des photos pas encore enregistrées), et le nettoyage refuse de
-s'exécuter si *rien* ne semble référencé, ce à quoi ressemblerait une base
-IndexedDB non chargée.
+s'exécuter tant que la boutique n'a pas été relue depuis Supabase, faute de quoi
+*rien* ne semblerait référencé et le balayage viderait chaque bucket.
 
 ---
 
@@ -205,6 +227,6 @@ via `has_permission(module, action)`.
 
 ## Stack
 
-React 18 · TypeScript · Vite · Tailwind CSS · Zustand (+ IndexedDB) ·
+React 18 · TypeScript · Vite · Tailwind CSS · Zustand ·
 React Router · Framer Motion · Emotion · Recharts · react-hook-form + Zod ·
 Supabase · browser-image-compression.

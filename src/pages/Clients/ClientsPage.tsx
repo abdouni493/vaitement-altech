@@ -16,6 +16,7 @@ import { formatMoney, initials } from '@/utils/helpers'
 import { clientStats, remaining } from '@/utils/calculations'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Client } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const ClientsPage = () => {
   const { t } = useTranslation()
@@ -50,9 +51,7 @@ export const ClientsPage = () => {
       toast.error(t('required'))
       return
     }
-    if (editing) updateClient(editing.id, form)
-    else addClient(form)
-    toast.success(t('saved'))
+    commit(editing ? updateClient(editing.id, form) : addClient(form), { success: t('saved') })
     setFormOpen(false)
   }
 
@@ -149,7 +148,7 @@ export const ClientsPage = () => {
         )}
       </Modal>
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deleteClient(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) commit(deleteClient(deleting.id), { success: t('deleted') }) }} />
     </div>
   )
 }

@@ -454,6 +454,16 @@ grant usage on schema public to anon, authenticated;
 -- so the grants that follow are the final word.
 revoke all on all tables in schema public from anon;
 
+-- Row-level security decides *which rows* a request may touch; it never grants
+-- the SQL privilege to touch the table at all. Both are required, so every
+-- policy above is inert until the matching grant below is in place.
+--
+-- Staff reach every table and the policies filter them down. Sequences too:
+-- the three `*_ref_seq` counters are read by the reference triggers, which run
+-- as the caller on insert.
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- The staff-facing views must respect the caller's row-level policies rather
 -- than run with the owner's rights, or a worker without the `clients` module
 -- could read balances through the view.
@@ -494,6 +504,12 @@ grant execute on function public.place_web_order(
   text, text, text, text, text, delivery_mode, uuid, jsonb, text
 ) to anon, authenticated;
 
+-- The login screen asks this before anyone has signed in.
+grant execute on function public.admin_exists() to anon, authenticated;
+
+-- The confirmation page reads back the order the shopper just placed.
+grant execute on function public.web_order_receipt(uuid) to anon, authenticated;
+
 grant execute on function
   public.web_order_accept(uuid),
   public.web_order_deliver(uuid, uuid, numeric),
@@ -507,8 +523,32 @@ grant execute on function
   public.is_staff()
 to authenticated;
 
+-- The storefront reads these as a signed-out visitor. Each one carries a
+-- `*_public_read` policy above that narrows the rows — a hidden article stays
+-- hidden, an expired campaign stays expired — but without the grant the policy
+-- never gets a chance to run and the shop answers "permission denied".
+--
 -- The order form needs the country list even before anything is published.
-grant select on public.wilayas, public.communes to anon;
+grant select on
+  public.wilayas,
+  public.communes,
+  public.store_settings,
+  public.contact_links,
+  public.website_settings,
+  public.brands,
+  public.categories,
+  public.colors,
+  public.materials,
+  public.size_scales,
+  public.products,
+  public.product_sizes,
+  public.product_images,
+  public.web_product_settings,
+  public.special_offers,
+  public.offer_lines,
+  public.delivery_companies,
+  public.delivery_prices
+to anon;
 
 -- ============================================================================
 --  15. STORAGE BUCKETS
@@ -597,3 +637,58 @@ create policy "store assets write" on storage.objects
 insert into public.store_settings (id)   values (true) on conflict (id) do nothing;
 insert into public.contact_links (id)    values (true) on conflict (id) do nothing;
 insert into public.website_settings (id) values (true) on conflict (id) do nothing;
+
+-- ============================================================================
+--  17. STARTER REFERENCE LISTS
+-- ----------------------------------------------------------------------------
+--  Suggestions, not rules: every one of these is editable from inside the app,
+--  and the boutique adds its own as it goes. They live here rather than in the
+--  interface so a fresh install opens with usable dropdowns — above all the
+--  size scales, without which the stock form has no sizes to offer.
+--
+--  `on conflict do nothing` throughout, so re-running never disturbs a list the
+--  owner has since curated.
+-- ============================================================================
+
+insert into public.categories (name) values
+  ('Robes'), ('Chemises'), ('T-shirts & Tops'), ('Pantalons'), ('Jupes'),
+  ('Vestes & Manteaux'), ('Chaussures'), ('Accessoires'), ('Enfants')
+on conflict (name) do nothing;
+
+insert into public.brands (name) values ('Autre')
+on conflict (name) do nothing;
+
+insert into public.colors (name) values
+  ('Noir'), ('Blanc'), ('Beige'), ('Camel'), ('Gris anthracite'),
+  ('Bleu indigo'), ('Bordeaux'), ('Kaki'), ('Écru')
+on conflict (name) do nothing;
+
+insert into public.materials (name) values
+  ('Coton'), ('Coton bio'), ('Lin'), ('Laine'), ('Cuir'),
+  ('Denim'), ('Soie'), ('Viscose'), ('Cachemire'), ('Polyester')
+on conflict (name) do nothing;
+
+insert into public.worker_roles (name) values
+  ('Vendeur·se'), ('Conseiller·ère de style'), ('Caissier·ère'),
+  ('Responsable boutique'), ('Retoucheur·se')
+on conflict (name) do nothing;
+
+-- `position` is what keeps XS→XXL in garment order rather than alphabetical.
+insert into public.size_scales (category, label, position) values
+  ('alpha', 'XS', 1), ('alpha', 'S', 2), ('alpha', 'M', 3),
+  ('alpha', 'L', 4), ('alpha', 'XL', 5), ('alpha', 'XXL', 6),
+
+  ('numeric', '34', 1), ('numeric', '36', 2), ('numeric', '38', 3),
+  ('numeric', '40', 4), ('numeric', '42', 5), ('numeric', '44', 6),
+  ('numeric', '46', 7), ('numeric', '48', 8),
+
+  ('shoes', '36', 1), ('shoes', '37', 2), ('shoes', '38', 3), ('shoes', '39', 4),
+  ('shoes', '40', 5), ('shoes', '41', 6), ('shoes', '42', 7), ('shoes', '43', 8),
+  ('shoes', '44', 9), ('shoes', '45', 10),
+
+  ('kids', '2 ans', 1), ('kids', '4 ans', 2), ('kids', '6 ans', 3),
+  ('kids', '8 ans', 4), ('kids', '10 ans', 5), ('kids', '12 ans', 6),
+  ('kids', '14 ans', 7),
+
+  ('oneSize', 'TU', 1)
+on conflict (category, label) do nothing;

@@ -12,3 +12,4 @@ coverage/
 
 # Windows shortcuts created by the launcher scripts
 *.lnk
+supabase/.temp/

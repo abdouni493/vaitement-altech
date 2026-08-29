@@ -17,10 +17,9 @@ import {
   MapPin,
 } from 'lucide-react'
 import { useCartStore, cartCount } from '@/store/useCartStore'
-import { useWebsiteStore } from '@/store/useWebsiteStore'
 import { useThemeStore } from '@/store/useThemeStore'
 import { useTranslation } from '@/i18n/useTranslation'
-import { useShopIdentity } from './useShopData'
+import { useShopBootstrap, useShopContacts, useShopIdentity } from './useShopData'
 import type { TranslationKey } from '@/i18n/translations'
 import { clsx } from '@/utils/clsx'
 
@@ -40,7 +39,11 @@ export const ShopLayout = () => {
   const { t, toggleLang, lang } = useTranslation()
   const location = useLocation()
   const items = useCartStore((s) => s.items)
-  const contacts = useWebsiteStore((s) => s.contacts)
+  // The shell is on every storefront route, so this is where the catalogue,
+  // the campaigns and the store's identity are read — once per visit, whichever
+  // page the visitor landed on.
+  useShopBootstrap()
+  const contacts = useShopContacts()
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const identity = useShopIdentity()

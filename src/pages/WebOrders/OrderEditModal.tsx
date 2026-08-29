@@ -13,6 +13,7 @@ import { useTranslation } from '@/i18n/useTranslation'
 import { WILAYAS, WILAYA_BY_CODE } from '@/data/algeria'
 import { formatMoney, sortSizes } from '@/utils/helpers'
 import type { DeliveryMode, WebOrder, WebOrderLine } from '@/types'
+import { commit } from '@/utils/mutate'
 
 interface Props {
   open: boolean
@@ -105,21 +106,23 @@ export const OrderEditModal = ({ open, onClose, order }: Props) => {
     setTouched(true)
     if (!order) return
     if (!customerName.trim() || !phone.trim() || lines.length === 0) return
-    updateOrder(order.id, {
-      customerName: customerName.trim(),
-      phone: phone.trim(),
-      wilayaCode,
-      wilaya: WILAYA_BY_CODE[wilayaCode]?.name ?? '',
-      commune,
-      address,
-      deliveryMode: mode,
-      deliveryCompanyId: companyId || null,
-      deliveryCompanyName: company?.name ?? '',
-      deliveryPrice,
-      note,
-      lines,
-    })
-    toast.success(t('saved'))
+    commit(
+      updateOrder(order.id, {
+        customerName: customerName.trim(),
+        phone: phone.trim(),
+        wilayaCode,
+        wilaya: WILAYA_BY_CODE[wilayaCode]?.name ?? '',
+        commune,
+        address,
+        deliveryMode: mode,
+        deliveryCompanyId: companyId || null,
+        deliveryCompanyName: company?.name ?? '',
+        deliveryPrice,
+        note,
+        lines,
+      }),
+      { success: t('saved') },
+    )
     onClose()
   }
 

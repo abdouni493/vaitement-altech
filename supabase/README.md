@@ -16,13 +16,25 @@ Paste each file into the Supabase **SQL Editor** and run it, in this order:
 
 Every file is idempotent — re-running one is safe.
 
+> **Already installed?** Re-run **`02_logic.sql`** and **`03_security.sql`**.
+> They gained the two functions the app now calls (`admin_exists()` and
+> `web_order_receipt()`), the starter reference lists, and — most importantly —
+> the table `GRANT`s that were missing.
+>
+> Row-level security decides *which rows* a request may touch; it never grants
+> the SQL privilege to touch the table at all. Both are required. Without the
+> grants, every policy in `03_security.sql` was inert: the storefront could not
+> read the catalogue and staff could not read their own boutique, both answering
+> `permission denied for table …`.
+
 ## Accounts
 
 Accounts live in `auth.users`; `public.profiles` carries the role and the
 permission matrix.
 
 **The owner.** Sign up through the app's *Create admin account* flow on the
-login page, or from the SQL editor:
+login page — the button is shown only while `admin_exists()` answers `false`,
+so it retires itself the moment the account is created. Or from the SQL editor:
 
 ```sql
 -- Supabase Dashboard → Authentication → Users → Add user,
@@ -35,8 +47,11 @@ login page, or from the SQL editor:
 metadata says — which is why the app's create-admin button disappears the moment
 one exists.
 
-**Staff.** Create the worker in the app first, then invite them with the worker
-row's id in the metadata:
+**Staff.** Tick *Compte* on the worker's form and give an e-mail and password:
+the app signs them up on an isolated client, so the owner keeps their own
+session while the trigger provisions the account. The equivalent by hand is to
+create the worker first, then invite them with the worker row's id in the
+metadata:
 
 ```sql
 -- metadata: { "full_name": "…", "username": "…", "worker_id": "<workers.id>" }

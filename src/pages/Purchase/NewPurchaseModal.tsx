@@ -35,7 +35,6 @@ interface NewPurchaseModalProps {
 export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalProps) => {
   const { t } = useTranslation()
   const products = useProductStore((s) => s.products)
-  const receiveStock = useProductStore((s) => s.receiveStock)
   const sizeScales = useProductStore((s) => s.sizeScales)
   const { suppliers, addSupplier } = useSupplierStore()
   const { addPurchase, updatePurchase } = usePurchaseStore()
@@ -51,6 +50,7 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
 
   const [paid, setPaid] = useState(0)
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -131,59 +131,64 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
 
   const rest = round2(Math.max(0, total - paid))
 
-  const handleNewSupplier = () => {
+  const handleNewSupplier = async () => {
     if (!newSup.name.trim()) {
       toast.error(t('required'))
       return
     }
-    const created = addSupplier({ name: newSup.name, phone: newSup.phone, address: newSup.address })
-    setSupplier(created)
-    setSupplierQuery(created.name)
-    setShowNewSupplier(false)
-    setNewSup({ name: '', phone: '', address: '' })
+    try {
+      const created = await addSupplier({
+        name: newSup.name,
+        phone: newSup.phone,
+        address: newSup.address,
+      })
+      setSupplier(created)
+      setSupplierQuery(created.name)
+      setShowNewSupplier(false)
+      setNewSup({ name: '', phone: '', address: '' })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    }
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (lines.length === 0) {
       toast.error(t('emptyCart'))
       return
     }
     const cleanLines: PurchaseLine[] = lines.map(({ _key, ...l }) => l) // eslint-disable-line @typescript-eslint/no-unused-vars
+    const isoDate = new Date(date).toISOString()
 
-    if (editing) {
-      updatePurchase(editing.id, {
-        lines: cleanLines,
-        total,
-        paid,
-        supplierId: supplier?.id ?? null,
-        supplierName: supplier?.name ?? (supplierQuery || 'Fournisseur'),
-        date: new Date(date).toISOString(),
-      })
+    setSaving(true)
+    try {
+      if (editing) {
+        // Replacing the lines walks the stock back and re-applies it, because
+        // the trigger fires on the delete as well as on the insert.
+        await updatePurchase(editing.id, {
+          lines: cleanLines,
+          supplierId: supplier?.id ?? null,
+          supplierName: supplier?.name ?? (supplierQuery || 'Fournisseur'),
+          date: isoDate,
+        })
+      } else {
+        // The reference, the totals and the stock top-up are all derived from
+        // these lines in the database — the modal must not receive the stock
+        // itself or every article would be counted in twice.
+        await addPurchase({
+          supplierId: supplier?.id ?? null,
+          supplierName: supplier?.name ?? (supplierQuery || 'Fournisseur'),
+          lines: cleanLines,
+          payments: paid > 0 ? [{ amount: paid, date: isoDate, note: 'Versement initial' }] : [],
+          date: isoDate,
+        })
+      }
       toast.success(t('saved'))
-    } else {
-      addPurchase({
-        supplierId: supplier?.id ?? null,
-        supplierName: supplier?.name ?? (supplierQuery || 'Fournisseur'),
-        lines: cleanLines,
-        total,
-        paid,
-        payments:
-          paid > 0
-            ? [{ id: `p-${Date.now()}`, amount: paid, date: new Date(date).toISOString(), note: 'Versement initial' }]
-            : [],
-        date: new Date(date).toISOString(),
-      })
-      // Each line tops up the exact size it was bought for.
-      cleanLines.forEach((l) =>
-        receiveStock(l.productId, l.size, l.quantity, {
-          purchasePrice: l.purchasePrice,
-          salePrice: l.salePrice,
-          minQuantity: l.minQuantity,
-        }),
-      )
-      toast.success(t('saved'))
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    } finally {
+      setSaving(false)
     }
-    onClose()
   }
 
   return (
@@ -198,7 +203,7 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
             <Button variant="outline" onClick={onClose}>
               {t('cancel')}
             </Button>
-            <Button onClick={submit}>
+            <Button onClick={() => void submit()} disabled={saving}>
               <IconSave size={16} />
               {t('save')}
             </Button>
@@ -445,7 +450,7 @@ export const NewPurchaseModal = ({ open, onClose, editing }: NewPurchaseModalPro
                         variant="sage"
                         size="sm"
                         className="w-full"
-                        onClick={handleNewSupplier}
+                        onClick={() => void handleNewSupplier()}
                       >
                         <IconAdd size={15} />
                         {t('add')}

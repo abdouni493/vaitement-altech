@@ -2,7 +2,16 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from '@/types'
 import { round2 } from '@/utils/helpers'
-import { idbStorage, onRehydrate, storeKey } from './persist'
+
+// ============================================================================
+// The shopper's basket
+// ----------------------------------------------------------------------------
+// The one thing in the app that is deliberately *not* in Supabase. A basket
+// belongs to an anonymous visitor on one device: there is no row to own it and
+// nobody to read it back. It stays in that browser's local storage until they
+// check out, and only then does `place_web_order()` turn it into an order the
+// boutique can see.
+// ============================================================================
 
 /** A line is identified by article + size + originating offer. */
 const sameLine = (a: CartItem, b: Pick<CartItem, 'productId' | 'size' | 'offerId'>): boolean =>
@@ -43,12 +52,7 @@ export const useCartStore = create<CartState>()(
       remove: (index) => set((s) => ({ items: s.items.filter((_, k) => k !== index) })),
       clear: () => set({ items: [] }),
     }),
-    {
-      name: storeKey('cart'),
-      storage: idbStorage(),
-      partialize: (s) => ({ items: s.items }),
-      onRehydrateStorage: onRehydrate('cart'),
-    },
+    { name: 'atelier-mode:cart', partialize: (s) => ({ items: s.items }) },
   ),
 )
 

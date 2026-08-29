@@ -34,7 +34,8 @@ const emptyForm = () => ({
 
 export const WorkerFormModal = ({ open, onClose, worker }: Props) => {
   const { t } = useTranslation()
-  const { roles, addRole, addWorker, updateWorker } = useWorkerStore()
+  const { roles, addRole, addWorker, updateWorker, createAccount } = useWorkerStore()
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm())
   const [showAddRole, setShowAddRole] = useState(false)
   const [newRole, setNewRole] = useState('')
@@ -65,19 +66,53 @@ export const WorkerFormModal = ({ open, onClose, worker }: Props) => {
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }))
 
-  const save = () => {
+  /** An account is being asked for that this worker does not have yet. */
+  const wantsNewAccount = form.hasAccount && !worker?.hasAccount
+
+  const save = async () => {
     if (!form.fullName.trim()) {
       toast.error(t('required'))
       return
     }
-    const payload = { ...form, startDate: new Date(form.startDate).toISOString() }
-    if (worker) {
-      updateWorker(worker.id, payload)
-    } else {
-      addWorker({ ...payload, permissions: {} })
+    if (wantsNewAccount && (!form.email.trim() || !form.password.trim())) {
+      toast.error(t('required'))
+      return
     }
-    toast.success(t('saved'))
-    onClose()
+
+    // The password is a credential: it goes to `auth.users` through the signup
+    // below and is never written onto the worker row.
+    const { password: _password, ...rest } = form
+    const payload = { ...rest, startDate: new Date(form.startDate).toISOString() }
+
+    setSaving(true)
+    try {
+      const saved = worker
+        ? await updateWorker(worker.id, payload).then(() => worker)
+        : await addWorker({ ...payload, permissions: {} })
+
+      if (wantsNewAccount) {
+        // Creating the sign-in also copies this worker's permission matrix onto
+        // their profile, so the matrix the owner ticked is what the database
+        // enforces on their very first request.
+        const result = await createAccount(saved.id, {
+          email: form.email.trim(),
+          password: form.password,
+          username: form.username.trim() || form.email.trim(),
+        })
+        if (!result.ok) {
+          toast.error(result.message ?? t('saveFailed'))
+          return
+        }
+        toast.success(t('accountCreatedForWorker'))
+      } else {
+        toast.success(t('saved'))
+      }
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('saveFailed'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -86,7 +121,7 @@ export const WorkerFormModal = ({ open, onClose, worker }: Props) => {
       onClose={onClose}
       title={worker ? t('editWorker') : t('newWorker')}
       size="lg"
-      footer={<><Button variant="outline" onClick={onClose}>{t('cancel')}</Button><Button onClick={save}><Check size={16} />{t('save')}</Button></>}
+      footer={<><Button variant="outline" onClick={onClose}>{t('cancel')}</Button><Button onClick={() => void save()} disabled={saving}><Check size={16} />{t('save')}</Button></>}
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -109,7 +144,7 @@ export const WorkerFormModal = ({ open, onClose, worker }: Props) => {
           {showAddRole && (
             <div className="mt-2 flex gap-2">
               <input value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder={t('createRole')} className="input-wood" />
-              <Button type="button" size="sm" onClick={() => { if (newRole.trim()) { addRole(newRole.trim()); set('role', newRole.trim()); setNewRole(''); setShowAddRole(false) } }}><Check size={15} /></Button>
+              <Button type="button" size="sm" onClick={() => { if (newRole.trim()) { void addRole(newRole.trim()); set('role', newRole.trim()); setNewRole(''); setShowAddRole(false) } }}><Check size={15} /></Button>
             </div>
           )}
         </div>
@@ -139,9 +174,13 @@ export const WorkerFormModal = ({ open, onClose, worker }: Props) => {
           </label>
           {form.hasAccount && (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Input label={t('email')} type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+              <Input label={t('email')} type="email" value={form.email} onChange={(e) => set('email', e.target.value)} disabled={!!worker?.hasAccount} />
               <Input label={t('username')} value={form.username} onChange={(e) => set('username', e.target.value)} />
-              <Input label={t('password')} type="text" value={form.password} onChange={(e) => set('password', e.target.value)} />
+              {/* Only while provisioning: an existing account's password lives
+                  in Supabase and is changed by its own holder. */}
+              {!worker?.hasAccount && (
+                <Input label={t('password')} type="text" value={form.password} onChange={(e) => set('password', e.target.value)} />
+              )}
             </div>
           )}
         </div>

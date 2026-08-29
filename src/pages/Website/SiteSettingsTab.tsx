@@ -8,6 +8,7 @@ import { useWebsiteStore } from '@/store/useWebsiteStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import type { WebsiteSettings } from '@/types'
+import { commit } from '@/utils/mutate'
 
 export const SiteSettingsTab = () => {
   const { t } = useTranslation()
@@ -20,10 +21,7 @@ export const SiteSettingsTab = () => {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(site)
 
-  const save = () => {
-    updateSite(draft)
-    toast.success(t('saved'))
-  }
+  const save = () => commit(updateSite(draft), { success: t('saved') })
 
   const patch = (data: Partial<WebsiteSettings>) => setDraft((d) => ({ ...d, ...data }))
 

@@ -2,10 +2,9 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingBag, Minus, Plus, Trash2, ArrowRight, ImageOff } from 'lucide-react'
 import { useCartStore, cartSubtotal } from '@/store/useCartStore'
-import { useProductStore } from '@/store/useProductStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney, sortSizes } from '@/utils/helpers'
-import { useShopIdentity } from './useShopData'
+import { usePublishedProducts, useShopIdentity } from './useShopData'
 
 export const ShopCart = () => {
   const { t } = useTranslation()
@@ -13,7 +12,7 @@ export const ShopCart = () => {
   const setQuantity = useCartStore((s) => s.setQuantity)
   const remove = useCartStore((s) => s.remove)
   const clear = useCartStore((s) => s.clear)
-  const products = useProductStore((s) => s.products)
+  const products = usePublishedProducts()
   const identity = useShopIdentity()
 
   const subtotal = cartSubtotal(items)

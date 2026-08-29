@@ -1,35 +1,53 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { CaisseTransaction } from '@/types'
-import { uid } from '@/utils/helpers'
-import { INITIAL_CAISSE } from '@/data/seedData'
-import { idbStorage, onRehydrate, storeKey } from './persist'
+import * as db from '@/lib/db'
 
+/**
+ * `public.caisse_transactions`, cached for rendering.
+ *
+ * Manual movements are written here; the deposit an online order produces on
+ * `completed` is booked by `web_order_cash()` server-side, so the caisse is
+ * reloaded after an order is cashed rather than added to from the browser.
+ */
 interface CaisseState {
   transactions: CaisseTransaction[]
-  addTransaction: (data: Omit<CaisseTransaction, 'id' | 'createdAt'>) => CaisseTransaction
-  updateTransaction: (id: string, data: Partial<CaisseTransaction>) => void
-  deleteTransaction: (id: string) => void
+  loading: boolean
+  load: () => Promise<void>
+  addTransaction: (
+    data: Pick<CaisseTransaction, 'type' | 'amount' | 'description' | 'date'>,
+  ) => Promise<CaisseTransaction>
+  updateTransaction: (id: string, data: Partial<CaisseTransaction>) => Promise<void>
+  deleteTransaction: (id: string) => Promise<void>
 }
 
-export const useCaisseStore = create<CaisseState>()(
-  persist(
-    (set) => ({
-      transactions: INITIAL_CAISSE,
-      addTransaction: (data) => {
-        const tx: CaisseTransaction = { ...data, id: uid('cx'), createdAt: new Date().toISOString() }
-        set((s) => ({ transactions: [tx, ...s.transactions] }))
-        return tx
-      },
-      updateTransaction: (id, data) =>
-        set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...data } : t)) })),
-      deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
-    }),
-    {
-      name: storeKey('caisse'),
-      storage: idbStorage(),
-      partialize: (s) => ({ transactions: s.transactions }),
-      onRehydrateStorage: onRehydrate('caisse'),
-    },
-  ),
-)
+export const useCaisseStore = create<CaisseState>()((set) => ({
+  transactions: [],
+  loading: false,
+
+  load: async () => {
+    set({ loading: true })
+    try {
+      set({ transactions: await db.fetchCaisse() })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  addTransaction: async (data) => {
+    const tx = await db.createCaisseTransaction(data)
+    set((s) => ({ transactions: [tx, ...s.transactions] }))
+    return tx
+  },
+
+  updateTransaction: async (id, data) => {
+    await db.updateCaisseTransaction(id, data)
+    set((s) => ({
+      transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...data } : t)),
+    }))
+  },
+
+  deleteTransaction: async (id) => {
+    await db.deleteCaisseTransaction(id)
+    set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }))
+  },
+}))

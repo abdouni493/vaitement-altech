@@ -1,57 +1,77 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { Purchase, Payment } from '@/types'
-import { uid, round2 } from '@/utils/helpers'
-import { INITIAL_PURCHASES } from '@/data/seedData'
-import { idbStorage, onRehydrate, storeKey } from './persist'
+import type { Purchase, PurchaseLine } from '@/types'
+import * as db from '@/lib/db'
+import { useProductStore } from './useProductStore'
+
+// ============================================================================
+// Purchases
+// ----------------------------------------------------------------------------
+// The mirror image of a sale: the `ACH-…` reference, the totals and the payment
+// status are derived in the database, and the trigger on `purchase_lines` both
+// raises the stock for the exact size received and refreshes the article's
+// prices and alert threshold. The modal sends lines, never a stock movement.
+// ============================================================================
 
 interface PurchaseState {
   purchases: Purchase[]
-  addPurchase: (data: Omit<Purchase, 'id' | 'reference' | 'createdAt'>) => Purchase
-  updatePurchase: (id: string, data: Partial<Purchase>) => void
-  deletePurchase: (id: string) => void
-  addPayment: (purchaseId: string, amount: number, date: string, note?: string) => void
-}
-
-const nextRef = (purchases: Purchase[]): string => {
-  const year = new Date().getFullYear()
-  const n = purchases.length + 1
-  return `ACH-${year}-${String(n).padStart(3, '0')}`
-}
-
-export const usePurchaseStore = create<PurchaseState>()(
-  persist(
-    (set, get) => ({
-      purchases: INITIAL_PURCHASES,
-      addPurchase: (data) => {
-        const purchase: Purchase = {
-          ...data,
-          id: uid('pu'),
-          reference: nextRef(get().purchases),
-          createdAt: new Date().toISOString(),
-        }
-        set((s) => ({ purchases: [purchase, ...s.purchases] }))
-        return purchase
-      },
-      updatePurchase: (id, data) =>
-        set((s) => ({
-          purchases: s.purchases.map((p) => (p.id === id ? { ...p, ...data } : p)),
-        })),
-      deletePurchase: (id) => set((s) => ({ purchases: s.purchases.filter((p) => p.id !== id) })),
-      addPayment: (purchaseId, amount, date, note) =>
-        set((s) => ({
-          purchases: s.purchases.map((p) => {
-            if (p.id !== purchaseId) return p
-            const payment: Payment = { id: uid('pay'), amount, date, note }
-            return { ...p, paid: round2(p.paid + amount), payments: [...p.payments, payment] }
-          }),
-        })),
-    }),
-    {
-      name: storeKey('purchases'),
-      storage: idbStorage(),
-      partialize: (s) => ({ purchases: s.purchases }),
-      onRehydrateStorage: onRehydrate('purchases'),
+  loading: boolean
+  load: () => Promise<void>
+  addPurchase: (data: {
+    supplierId: string | null
+    supplierName: string
+    lines: PurchaseLine[]
+    payments: { amount: number; date: string; note?: string }[]
+    date: string
+  }) => Promise<Purchase>
+  updatePurchase: (
+    id: string,
+    data: {
+      supplierId?: string | null
+      supplierName?: string
+      date?: string
+      lines?: PurchaseLine[]
     },
-  ),
-)
+  ) => Promise<void>
+  deletePurchase: (id: string) => Promise<void>
+  addPayment: (purchaseId: string, amount: number, date: string, note?: string) => Promise<void>
+}
+
+export const usePurchaseStore = create<PurchaseState>()((set) => ({
+  purchases: [],
+  loading: false,
+
+  load: async () => {
+    set({ loading: true })
+    try {
+      set({ purchases: await db.fetchPurchases() })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  addPurchase: async (data) => {
+    const purchase = await db.createPurchase(data)
+    set((s) => ({ purchases: [purchase, ...s.purchases] }))
+    // The lines topped the stock up server-side; read the catalogue back.
+    await useProductStore.getState().load()
+    return purchase
+  },
+
+  updatePurchase: async (id, data) => {
+    const purchase = await db.updatePurchase(id, data)
+    set((s) => ({ purchases: s.purchases.map((p) => (p.id === id ? purchase : p)) }))
+    if (data.lines) await useProductStore.getState().load()
+  },
+
+  deletePurchase: async (id) => {
+    await db.deletePurchase(id)
+    set((s) => ({ purchases: s.purchases.filter((p) => p.id !== id) }))
+    // Removing the lines took the received units back out.
+    await useProductStore.getState().load()
+  },
+
+  addPayment: async (purchaseId, amount, date, note) => {
+    const purchase = await db.addPurchasePayment(purchaseId, amount, date, note)
+    set((s) => ({ purchases: s.purchases.map((p) => (p.id === purchaseId ? purchase : p)) }))
+  },
+}))

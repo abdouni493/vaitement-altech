@@ -110,8 +110,10 @@ export const ImageField = ({
       })
       onChange(result.src)
       report([result])
-    } catch {
-      toast.error(t('imageUploadFailed'))
+    } catch (e) {
+      // The bucket refused it, or the line dropped. Either way the picture was
+      // not stored, and saying so beats a silent placeholder.
+      toast.error(e instanceof Error && e.message ? e.message : t('imageUploadFailed'))
     } finally {
       setBusy(false)
       setPercent(0)
@@ -218,8 +220,10 @@ export const ImageGallery = ({
       })
       onChange([...value, ...results.map((r) => r.src)].slice(0, max))
       report(results)
-    } catch {
-      toast.error(t('imageUploadFailed'))
+    } catch (e) {
+      // The bucket refused it, or the line dropped. Either way the picture was
+      // not stored, and saying so beats a silent placeholder.
+      toast.error(e instanceof Error && e.message ? e.message : t('imageUploadFailed'))
     } finally {
       setBusy(false)
       setPercent(0)

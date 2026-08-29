@@ -27,6 +27,7 @@ import { copyText, offerOrderLink } from '@/utils/media'
 import { cardVariants } from '@/utils/animations'
 import { OfferModal } from './OfferModal'
 import type { SpecialOffer } from '@/types'
+import { commit } from '@/utils/mutate'
 
 /** Where a campaign sits relative to now — drives the badge on its card. */
 const phaseOf = (o: SpecialOffer): 'live' | 'scheduled' | 'expired' | 'off' => {
@@ -199,8 +200,7 @@ export const OffersTab = () => {
                       icon: o.active ? <EyeOff size={14} /> : <Eye size={14} />,
                       label: o.active ? t('deactivate') : t('activate'),
                       onClick: () => {
-                        toggleOffer(o.id)
-                        toast.success(o.active ? t('offerInactive') : t('offerActive'))
+                        commit(toggleOffer(o.id), { success: o.active ? t('offerInactive') : t('offerActive') })
                       },
                       accent: !o.active,
                     },
@@ -380,8 +380,7 @@ export const OffersTab = () => {
         onClose={() => setRemoving(null)}
         onConfirm={() => {
           if (removing) {
-            deleteOffer(removing.id)
-            toast.success(t('deleted'))
+            commit(deleteOffer(removing.id), { success: t('deleted') })
           }
           setRemoving(null)
           setDetails(null)

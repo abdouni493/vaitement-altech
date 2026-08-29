@@ -206,19 +206,20 @@ export const SalesPage = () => {
         <Modal open={!!editing} onClose={() => setEditing(null)} title={`${t('edit')} — ${editing.reference}`} size="md"
           footer={<><Button variant="outline" onClick={() => setEditing(null)}>{t('cancel')}</Button><Button onClick={() => { setEditing(null) }}><Check size={16} />{t('save')}</Button></>}>
           <SaleEdit sale={editing} onChange={(discount) => {
-            const subtotal = editing.subtotal
-            const total = round2(Math.max(0, subtotal - discount))
-            updateSale(editing.id, { discount, total })
+            // The total is recomputed by `recalc_sale_totals()`; the preview
+            // below only keeps the open dialog in step until the row returns.
+            const total = round2(Math.max(0, editing.subtotal - discount))
+            void updateSale(editing.id, { discount })
             setEditing({ ...editing, discount, total })
           }} />
         </Modal>
       )}
 
       {paying && (
-        <PaymentModal open={!!paying} onClose={() => setPaying(null)} total={paying.total} paid={paying.paid} payments={paying.payments} onPay={(amount, date, note) => addPayment(paying.id, amount, date, note)} />
+        <PaymentModal open={!!paying} onClose={() => setPaying(null)} total={paying.total} paid={paying.paid} payments={paying.payments} onPay={(amount, date, note) => void addPayment(paying.id, amount, date, note)} />
       )}
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deleteSale(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { void deleteSale(deleting.id).then(() => toast.success(t('deleted'))).catch((e) => toast.error(e instanceof Error ? e.message : t('deleteFailed'))) } }} />
 
       <div className="hidden">{printDoc && <InvoicePrint ref={printRef} doc={printDoc} settings={settings} kind="sale" />}</div>
     </div>

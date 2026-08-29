@@ -12,6 +12,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney, round2 } from '@/utils/helpers'
 import type { OfferLine, SpecialOffer } from '@/types'
+import { commit } from '@/utils/mutate'
 
 interface Props {
   open: boolean
@@ -138,9 +139,7 @@ export const OfferModal = ({ open, onClose, offer }: Props) => {
       startDate: fromLocalInput(start),
       endDate: fromLocalInput(end),
     }
-    if (offer) updateOffer(offer.id, payload)
-    else addOffer(payload)
-    toast.success(t('saved'))
+    commit(offer ? updateOffer(offer.id, payload) : addOffer(payload), { success: t('saved') })
     onClose()
   }
 

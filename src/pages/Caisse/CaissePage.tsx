@@ -73,6 +73,7 @@ import {
 import { formatMoney } from '@/utils/helpers'
 import { cardVariants, fadeUp, staggerContainer } from '@/utils/animations'
 import type { CaisseTransaction, CaisseType } from '@/types'
+import { commit } from '@/utils/mutate'
 
 type PeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom'
 
@@ -252,9 +253,9 @@ export const CaissePage = () => {
       description: form.description.trim(),
       date: new Date(form.date).toISOString(),
     }
-    if (editing) updateTransaction(editing.id, payload)
-    else addTransaction(payload)
-    toast.success(t('saved'))
+    commit(editing ? updateTransaction(editing.id, payload) : addTransaction(payload), {
+      success: t('saved'),
+    })
     setFormOpen(false)
   }
 
@@ -684,7 +685,7 @@ export const CaissePage = () => {
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        onConfirm={() => { if (deleting) { deleteTransaction(deleting.id); toast.success(t('deleted')) } }}
+        onConfirm={() => { if (deleting) commit(deleteTransaction(deleting.id), { success: t('deleted') }) }}
       />
     </motion.div>
   )

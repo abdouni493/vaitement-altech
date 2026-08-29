@@ -26,6 +26,7 @@ import { cardVariants } from '@/utils/animations'
 import { clsx } from '@/utils/clsx'
 import type { Product } from '@/types'
 import type { TranslationKey } from '@/i18n/translations'
+import { commit } from '@/utils/mutate'
 
 type Filter = 'all' | 'online' | 'hidden'
 
@@ -220,8 +221,7 @@ export const WebProductsTab = () => {
                       icon={hidden ? <Eye size={14} /> : <EyeOff size={14} />}
                       label={hidden ? t('showOnSite') : t('hideFromSite')}
                       onClick={() => {
-                        toggleProduct(p.id)
-                        toast.success(hidden ? t('publishedOnSite') : t('hiddenFromSite'))
+                        commit(toggleProduct(p.id), { success: hidden ? t('publishedOnSite') : t('hiddenFromSite') })
                       }}
                       tone={hidden ? 'accent' : 'default'}
                     />
@@ -265,8 +265,7 @@ export const WebProductsTab = () => {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setProductMeta(details.id, { featured: !isFeatured(details.id) })
-                  toast.success(t('saved'))
+                  commit(setProductMeta(details.id, { featured: !isFeatured(details.id) }), { success: t('saved') })
                 }}
               >
                 <Star size={14} />

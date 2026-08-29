@@ -27,6 +27,7 @@ import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney, initials } from '@/utils/helpers'
 import { cardVariants, staggerContainer } from '@/utils/animations'
 import type { Worker } from '@/types'
+import { commit } from '@/utils/mutate'
 
 type ModalType = 'form' | 'view' | 'permissions' | 'advances' | 'absences' | 'salary' | null
 
@@ -117,7 +118,7 @@ export const WorkersPage = () => {
         )}
       </Modal>
 
-      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) { deleteWorker(deleting.id); toast.success(t('deleted')) } }} />
+      <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) commit(deleteWorker(deleting.id), { success: t('deleted') }) }} />
     </div>
   )
 }

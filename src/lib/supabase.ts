@@ -3,13 +3,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 // ============================================================================
 // Supabase connection
 // ----------------------------------------------------------------------------
-// The boutique runs local-first: every store reads and writes IndexedDB, so the
-// app is fully usable with no network. Supabase is the shared backend on top of
-// that — it owns the accounts (auth.users + profiles), the storage buckets that
-// serve the storefront images, and the tables described in `supabase/`.
+// Supabase is the boutique's database, not a mirror of one. Accounts live in
+// `auth.users` with their role and permission matrix in `public.profiles`, the
+// business rows live in the tables described by `supabase/`, and the images
+// live in the four public buckets. Nothing is kept on the device.
 //
 // The client is created only when both variables are present, so a checkout
-// without an `.env` still boots instead of throwing at module load.
+// without an `.env` still boots and can say what is missing instead of
+// throwing at module load.
 // ============================================================================
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -42,28 +43,45 @@ export interface ProfileRow {
   active: boolean
 }
 
+const PROFILE_COLUMNS = 'id, full_name, username, email, role, is_admin, permissions, active'
+
+/** What went wrong, in the language the interface speaks. */
+export class AuthError extends Error {}
+
 /**
- * Sign in against Supabase. Returns `null` when Supabase is not configured or
- * the credentials are rejected, which lets the caller fall back to the local
- * account store without special-casing the offline install.
+ * Sign in against Supabase.
+ *
+ * Returns `null` when the credentials are rejected, and throws when the account
+ * is real but unusable — deactivated, or without a profile row — so the login
+ * screen can tell the two apart instead of showing "wrong password" to someone
+ * whose access was simply revoked.
  */
 export const signInWithSupabase = async (
   email: string,
   password: string,
 ): Promise<ProfileRow | null> => {
-  if (!supabase) return null
+  if (!supabase) throw new AuthError('supabase-not-configured')
+
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error || !data.user) return null
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, full_name, username, email, role, is_admin, permissions, active')
+    .select(PROFILE_COLUMNS)
     .eq('id', data.user.id)
-    .single()
+    .maybeSingle()
 
-  if (!profile || profile.active === false) {
+  if (profileError) {
     await supabase.auth.signOut()
-    return null
+    throw new AuthError(profileError.message)
+  }
+  if (!profile) {
+    await supabase.auth.signOut()
+    throw new AuthError('no-profile')
+  }
+  if (profile.active === false) {
+    await supabase.auth.signOut()
+    throw new AuthError('account-disabled')
   }
   return profile as ProfileRow
 }
@@ -79,8 +97,8 @@ export type SessionCheck =
  *
  * Called on every boot so a refresh keeps the user signed in. A revoked or
  * deactivated account resolves to `signed-out`; a network failure resolves to
- * `unreachable`, which the caller treats as "stay signed in" — being offline
- * must never throw the user back to the login screen.
+ * `unreachable`, which the caller treats as "wait rather than sign out" — a
+ * flaky connection must not throw someone back to the login screen.
  */
 export const getSessionProfile = async (): Promise<SessionCheck> => {
   if (!supabase) return { status: 'signed-out' }
@@ -93,9 +111,9 @@ export const getSessionProfile = async (): Promise<SessionCheck> => {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name, username, email, role, is_admin, permissions, active')
+      .select(PROFILE_COLUMNS)
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (profileError) return { status: 'unreachable' }
     if (!profile || profile.active === false) return { status: 'signed-out' }
@@ -106,24 +124,109 @@ export const getSessionProfile = async (): Promise<SessionCheck> => {
 }
 
 /**
- * Register the owner account. The `handle_new_user` trigger in the schema
- * creates the matching `profiles` row, so nothing is inserted here.
+ * Does the boutique already have an owner?
+ *
+ * Answered by the `admin_exists()` RPC, which is `security definer` so the
+ * login screen can ask it before anyone has signed in. It returns a bare
+ * boolean — an anonymous visitor learns that the boutique is claimed and
+ * nothing else. This is what retires the "create administrator" button.
+ *
+ * Returns `null` when the question cannot be answered (offline, project
+ * unreachable): the caller keeps the button hidden rather than inviting a
+ * signup that would fail.
+ */
+export const adminExistsInSupabase = async (): Promise<
+  { ok: true; exists: boolean } | { ok: false; message: string }
+> => {
+  if (!supabase) return { ok: false, message: 'supabase-not-configured' }
+  try {
+    const { data, error } = await supabase.rpc('admin_exists')
+    // A missing function means the SQL in `supabase/` has not been run against
+    // this project yet. That is worth saying out loud on the login screen, or
+    // the owner is left staring at a form with no way to create their account.
+    if (error) return { ok: false, message: error.message }
+    return { ok: true, exists: Boolean(data) }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'unreachable' }
+  }
+}
+
+export interface SignUpResult {
+  ok: boolean
+  /** Set when Supabase issued a session straight away. */
+  signedIn?: boolean
+  message?: string
+}
+
+/**
+ * Register the owner account in `auth.users`.
+ *
+ * The `handle_new_user` trigger writes the matching `profiles` row and makes
+ * the very first account an administrator whatever the metadata says, so
+ * nothing is inserted here. A project with e-mail confirmation switched on
+ * creates the user without a session — reported back as `signedIn: false` so
+ * the screen can ask the owner to confirm and sign in.
  */
 export const signUpAdminWithSupabase = async (data: {
   email: string
   password: string
   fullName: string
   username: string
-}): Promise<{ ok: boolean; message?: string }> => {
-  if (!supabase) return { ok: false, message: 'not-configured' }
-  const { error } = await supabase.auth.signUp({
+}): Promise<SignUpResult> => {
+  if (!supabase) return { ok: false, message: 'supabase-not-configured' }
+
+  const { data: result, error } = await supabase.auth.signUp({
     email: data.email,
     password: data.password,
     options: {
       data: { full_name: data.fullName, username: data.username, is_admin: true },
     },
   })
-  return error ? { ok: false, message: error.message } : { ok: true }
+  if (error) return { ok: false, message: error.message }
+  return { ok: true, signedIn: Boolean(result.session) }
+}
+
+/**
+ * Create the auth account for a member of staff, without disturbing the owner.
+ *
+ * `signUp` on the shared client would swap the new user's session in for the
+ * owner's and sign them out of their own boutique. So the call is made on a
+ * throwaway client that persists nothing: the account and its profile are
+ * created by the trigger, the session it returns is dropped on the floor, and
+ * the owner's tab carries on as it was.
+ *
+ * The worker's id travels in the metadata, which is what tells
+ * `handle_new_user` to copy that worker's permission matrix onto the profile
+ * and flip `workers.has_account`.
+ */
+export const provisionWorkerAccount = async (data: {
+  email: string
+  password: string
+  fullName: string
+  username: string
+  workerId: string
+  role: string
+}): Promise<SignUpResult> => {
+  if (!isSupabaseConfigured) return { ok: false, message: 'supabase-not-configured' }
+
+  const isolated = createClient(url as string, anonKey as string, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+
+  const { error } = await isolated.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      data: {
+        full_name: data.fullName,
+        username: data.username,
+        worker_id: data.workerId,
+        role: data.role,
+      },
+    },
+  })
+  if (error) return { ok: false, message: error.message }
+  return { ok: true }
 }
 
 export const signOutFromSupabase = async (): Promise<void> => {

@@ -5,14 +5,24 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Globe, UserPlus, LogIn, ChevronDown, ExternalLink, ShieldCheck } from 'lucide-react'
-import { useAuthStore, hasAdmin } from '@/store/useAuthStore'
+import {
+  Globe,
+  UserPlus,
+  LogIn,
+  ChevronDown,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+} from 'lucide-react'
+import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { Button } from '@/components/ui/Button'
 
+// Supabase authenticates on the e-mail address, so that is what the field
+// takes — a username has nothing to sign in against.
 const loginSchema = z.object({
-  identifier: z.string().min(1),
+  identifier: z.string().email(),
   password: z.string().min(1),
 })
 type LoginForm = z.infer<typeof loginSchema>
@@ -29,13 +39,21 @@ export const Login = () => {
   const location = useLocation()
   const currentUser = useAuthStore((s) => s.currentUser)
   const login = useAuthStore((s) => s.login)
-  const users = useAuthStore((s) => s.users)
   const createAdmin = useAuthStore((s) => s.createAdmin)
+  const adminExists = useAuthStore((s) => s.adminExists)
+  const dbError = useAuthStore((s) => s.dbError)
   const settings = useSettingsStore((s) => s.settings)
   const [showCreate, setShowCreate] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  /** The owner account exists → the creation flow retires itself for good. */
-  const adminExists = hasAdmin(users)
+  /**
+   * The creation flow is offered only once Supabase has confirmed the boutique
+   * has *no* owner. While the answer is still unknown (`null`) it stays hidden,
+   * so it can never flash on screen for a boutique that is already claimed —
+   * and the moment an owner is registered the store flips this to `true` and
+   * the whole section retires itself.
+   */
+  const offerCreateAdmin = adminExists === false
 
   /** The page the guard turned away, so signing in resumes it. */
   const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
@@ -47,12 +65,22 @@ export const Login = () => {
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) })
 
   const onLogin = async (data: LoginForm) => {
-    const user = await login(data.identifier, data.password)
-    if (user) {
-      toast.success(`${t('welcomeBack')}, ${user.fullName}`)
-      navigate(from, { replace: true })
-    } else {
-      toast.error(t('wrongCredentials'))
+    setBusy(true)
+    try {
+      const result = await login(data.identifier, data.password)
+      if (result.ok) {
+        toast.success(`${t('welcomeBack')}, ${result.user.fullName}`)
+        navigate(from, { replace: true })
+        return
+      }
+      // The three refusals mean different things to whoever is standing there,
+      // so they are not collapsed into one "wrong password".
+      if (result.reason === 'disabled') toast.error(t('accountDisabled'))
+      else if (result.reason === 'not-configured') toast.error(t('dbNotConfigured'))
+      else if (result.reason === 'error') toast.error(result.message ?? t('connectionError'))
+      else toast.error(t('wrongCredentials'))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -71,20 +99,36 @@ export const Login = () => {
 
   const onCreate = async (data: CreateForm) => {
     // A second administrator can never be created from the public login page.
-    if (hasAdmin(useAuthStore.getState().users)) {
+    if (useAuthStore.getState().adminExists) {
       toast.error(t('adminExists'))
       setShowCreate(false)
       return
     }
-    const user = await createAdmin({
-      fullName: data.fullName,
-      username: data.username,
-      email: data.email,
-      password: data.password,
-    })
-    useAuthStore.setState({ currentUser: user })
-    toast.success(t('accountCreated'))
-    navigate('/dashboard')
+
+    setBusy(true)
+    try {
+      const result = await createAdmin({
+        fullName: data.fullName,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+      })
+
+      if (!result.ok) {
+        toast.error(result.message ?? t('connectionError'))
+        return
+      }
+
+      // The account is in `auth.users` either way, so the section collapses on
+      // its own. Whether the owner is carried straight in depends on the
+      // project: with e-mail confirmation on, Supabase issues no session yet.
+      toast.success(t('accountCreated'))
+      setShowCreate(false)
+      if (result.signedIn) navigate('/dashboard', { replace: true })
+      else toast(t('confirmEmailToSignIn'), { icon: 'ℹ️', duration: 6000 })
+    } finally {
+      setBusy(false)
+    }
   }
 
   // Already signed in — reaching /login by refresh, a bookmark or the back
@@ -227,16 +271,32 @@ export const Login = () => {
 
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-black transition hover:bg-white/85"
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 bg-white px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LogIn size={16} />
               {t('login')}
             </button>
           </form>
 
+          {/* The project answered neither yes nor no: it cannot be reached, or
+              the SQL in `supabase/` has never been run against it. Saying so
+              beats a form that would fail on submit. */}
+          {dbError && (
+            <div className="mt-7 flex items-start gap-2 border border-terracotta/40 bg-terracotta/10 px-3 py-2.5 text-[11px] leading-relaxed text-white/75">
+              <AlertTriangle size={14} className="mt-px shrink-0 text-terracotta" />
+              <span>
+                {t('connectionError')}
+                <span className="mt-1 block break-words font-mono text-[10px] text-white/45">
+                  {dbError}
+                </span>
+              </span>
+            </div>
+          )}
+
           {/* First-run: the boutique has no owner yet */}
           <AnimatePresence initial={false}>
-            {!adminExists && (
+            {offerCreateAdmin && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -322,7 +382,12 @@ export const Login = () => {
                             )}
                           </div>
                         </div>
-                        <Button type="submit" size="lg" className="w-full !bg-white !text-black">
+                        <Button
+                          type="submit"
+                          size="lg"
+                          disabled={busy}
+                          className="w-full !bg-white !text-black"
+                        >
                           <UserPlus size={16} />
                           {t('createMyAdmin')}
                         </Button>

@@ -2,21 +2,20 @@ import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Check, Phone, MapPin, Package, ArrowRight } from 'lucide-react'
-import { useOrderStore } from '@/store/useOrderStore'
-import { useWebsiteStore } from '@/store/useWebsiteStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { formatMoney } from '@/utils/helpers'
-import { useShopIdentity } from './useShopData'
+import { useShopContacts, useShopIdentity, useShopOrder } from './useShopData'
 
 export const ShopThankYou = () => {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
-  const orders = useOrderStore((s) => s.orders)
-  const contacts = useWebsiteStore((s) => s.contacts)
+  const contacts = useShopContacts()
   const identity = useShopIdentity()
   const reduced = useReducedMotion()
 
-  const order = orders.find((o) => o.id === id)
+  // Read back by reference rather than from memory: this page is reachable
+  // from a copied link and survives a refresh.
+  const order = useShopOrder(id)
 
   useEffect(() => {
     window.scrollTo({ top: 0 })
