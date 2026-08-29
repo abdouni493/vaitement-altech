@@ -109,8 +109,10 @@ export interface Product {
   collection: string
 
   /**
-   * Photos shown on the storefront, as data URLs. The first is the cover.
-   * Optional: articles created before the storefront existed have none.
+   * Photos shown on the storefront; the first is the cover. Each is a URL in
+   * the `product-images` bucket, or a compressed data URL when the boutique is
+   * running without Supabase. Optional: articles created before the storefront
+   * existed have none.
    */
   images?: string[]
 
@@ -294,7 +296,8 @@ export interface CaisseTransaction {
 // ----------------------------------------------------------------------------
 
 export interface StoreSettings {
-  logo: string // base64 or empty
+  /** `store-assets/logo.webp`, a compressed data URL offline, or empty. */
+  logo: string
   name: string
   description: string
   email: string
@@ -418,9 +421,9 @@ export interface ContactLinks {
 }
 
 export interface WebsiteSettings {
-  /** Overrides the app favicon when set (data URL). */
+  /** Overrides the app favicon when set. Bucket URL, or data URL offline. */
   favicon: string
-  /** Full-bleed image behind the landing hero (data URL). */
+  /** Full-bleed image behind the landing hero. Bucket URL, or data URL. */
   heroImage: string
   /** Marketing copy shown under the store name on the landing page. */
   description: string

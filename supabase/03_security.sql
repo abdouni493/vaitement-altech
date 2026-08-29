@@ -518,10 +518,14 @@ grant select on public.wilayas, public.communes to anon;
 --  permission, enforced by the policies on `storage.objects`.
 --
 --  Path conventions:
---    product-images/<product_id>/<n>.jpg
---    offer-images/<offer_id>/cover.jpg
---    delivery-logos/<company_id>/logo.png
---    store-assets/logo.png · store-assets/favicon.png · store-assets/hero.jpg
+--    product-images/<product_id>/<random>.webp
+--    offer-images/<offer_id>/<random>.webp
+--    delivery-logos/<company_id>/<random>.webp
+--    store-assets/logo.webp · store-assets/favicon.webp · store-assets/hero.webp
+--
+--  The app uploads through `uploadImage` (src/lib/imageUpload.ts), which
+--  recompresses every picked file to a few hundred kilobytes of WebP first.
+--  The size limits below are a backstop, not the target.
 -- ============================================================================
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

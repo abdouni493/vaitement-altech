@@ -98,22 +98,49 @@ a signed URL — writing still needs the matching permission.
 
 | Bucket | Path convention | Write permission |
 |--------|-----------------|------------------|
-| `product-images` | `<product_id>/<n>.jpg` | `stock:edit` or `website:edit` |
-| `offer-images` | `<offer_id>/cover.jpg` | `website:edit` |
-| `delivery-logos` | `<company_id>/logo.png` | `website:edit` |
-| `store-assets` | `logo.png`, `favicon.png`, `hero.jpg` | `settings:edit` or `website:edit` |
+| `product-images` | `<product_id>/<random>.webp` | `stock:edit` or `website:edit` |
+| `offer-images` | `<offer_id>/<random>.webp` | `website:edit` |
+| `delivery-logos` | `<company_id>/<random>.webp` | `website:edit` |
+| `store-assets` | `logo.webp`, `favicon.webp`, `hero.webp` | `settings:edit` or `website:edit` |
 
-Upload and read from the app:
+Gallery objects get a **random name** so a replaced photo can never be served
+from a stale CDN copy. The three singletons in `store-assets` do reuse a fixed
+name — they are uploaded with `upsert: true` and the app appends a `?v=` query
+string to bust the cache.
+
+A record created before it is saved has no id yet, so its first uploads land in
+a `nouveau/` folder inside the bucket.
+
+### Uploading from the app
+
+Never call `storage.upload` directly — go through `uploadImage`, which
+compresses the file to its preset's target weight first (see the *Images*
+section of the root README) and falls back to a local data URL when the project
+is unreachable:
 
 ```ts
-import { supabase, publicAssetUrl } from '@/lib/supabase'
+import { uploadImage } from '@/lib/imageUpload'
 
-await supabase!.storage
-  .from('product-images')
-  .upload(`${productId}/01.jpg`, file, { upsert: true })
-
-const src = publicAssetUrl('product-images', `${productId}/01.jpg`)
+const { src, remote, originalSize, size } = await uploadImage(file, {
+  bucket: 'product-images',
+  folder: productId,
+  preset: 'product',
+})
+// src → https://<ref>.supabase.co/storage/v1/object/public/product-images/…
+//       or a compressed data URL when offline (remote === false)
 ```
+
+To read an object whose path you already hold:
+
+```ts
+import { publicAssetUrl } from '@/lib/supabase'
+
+const src = publicAssetUrl('product-images', `${productId}/abc123.webp`)
+```
+
+The buckets accept `image/webp`, so the compressor's preferred output needs no
+schema change. Their `file_size_limit` (5 MB for photos) is a backstop only —
+the client aims an order of magnitude below it.
 
 ## Reporting
 

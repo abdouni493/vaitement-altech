@@ -257,7 +257,9 @@ export const DeliveryTab = () => {
             value={logo}
             onChange={setLogo}
             ratio="square"
-            maxEdge={320}
+            bucket="delivery-logos"
+            folder={editing?.id ?? 'nouveau'}
+            preset="carrier"
           />
           <Textarea label={t('note')} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>

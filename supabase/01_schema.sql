@@ -234,7 +234,7 @@ create index if not exists product_sizes_product_idx on public.product_sizes (pr
 create table if not exists public.product_images (
   id         uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
-  /** Path inside the `product-images` bucket, e.g. "<product_id>/01.jpg". */
+  /** Path inside the `product-images` bucket, e.g. "<product_id>/k7x2a.webp". */
   path       text not null,
   position   integer not null default 0,
   created_at timestamptz not null default now()

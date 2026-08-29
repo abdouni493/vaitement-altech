@@ -73,17 +73,21 @@ export const SiteSettingsTab = () => {
               value={draft.favicon}
               onChange={(v) => patch({ favicon: v })}
               ratio="square"
-              maxEdge={256}
               accept="image/png,image/svg+xml,image/x-icon,image/jpeg"
               hint={t('faviconHint')}
+              bucket="store-assets"
+              name="favicon"
+              preset="favicon"
             />
             <ImageField
               label={t('heroImage')}
               value={draft.heroImage}
               onChange={(v) => patch({ heroImage: v })}
               ratio="wide"
-              maxEdge={1920}
               hint={t('heroHint')}
+              bucket="store-assets"
+              name="hero"
+              preset="hero"
             />
           </div>
         </section>

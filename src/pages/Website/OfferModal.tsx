@@ -181,7 +181,15 @@ export const OfferModal = ({ open, onClose, offer }: Props) => {
               rows={4}
             />
           </div>
-          <ImageField label={t('offerImage')} value={image} onChange={setImage} ratio="portrait" />
+          <ImageField
+            label={t('offerImage')}
+            value={image}
+            onChange={setImage}
+            ratio="portrait"
+            bucket="offer-images"
+            folder={offer?.id ?? 'nouveau'}
+            preset="offer"
+          />
         </section>
 
         {/* ── Campaign window ────────────────────────────────────────────── */}

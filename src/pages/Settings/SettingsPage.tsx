@@ -9,6 +9,8 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useTranslation } from '@/i18n/useTranslation'
 import { exportData, importData } from '@/utils/export'
+import { uploadImage } from '@/lib/imageUpload'
+import { formatBytes, savedPercent } from '@/utils/media'
 import { fadeUp, staggerContainer } from '@/utils/animations'
 
 const Section = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
@@ -28,6 +30,7 @@ export const SettingsPage = () => {
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
 
+  const [logoBusy, setLogoBusy] = useState(false)
   const [store, setStore] = useState(settings)
   const [account, setAccount] = useState({
     fullName: currentUser?.fullName ?? '',
@@ -45,17 +48,36 @@ export const SettingsPage = () => {
     toast.success(t('saved'))
   }
 
-  const onLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * The logo is printed on every invoice and shown in the header, so it goes
+   * through the same squeeze as the storefront photos: a 6 MB picture becomes
+   * a ~100 KB WebP in the `store-assets` bucket instead of a base64 blob that
+   * every backup would have to carry.
+   */
+  const onLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const logo = reader.result as string
-      setStore((s) => ({ ...s, logo }))
-      updateSettings({ logo })
-      toast.success(t('saved'))
+    setLogoBusy(true)
+    try {
+      const result = await uploadImage(file, {
+        bucket: 'store-assets',
+        name: 'logo',
+        preset: 'logo',
+      })
+      setStore((s) => ({ ...s, logo: result.src }))
+      updateSettings({ logo: result.src })
+      const saved = savedPercent(result.originalSize, result.size)
+      toast.success(
+        saved >= 5
+          ? `${t('imageCompressed')} · ${formatBytes(result.originalSize)} → ${formatBytes(result.size)} (−${saved} %)`
+          : t('saved'),
+      )
+    } catch {
+      toast.error(t('imageUploadFailed'))
+    } finally {
+      setLogoBusy(false)
+      e.target.value = ''
     }
-    reader.readAsDataURL(file)
   }
 
   const onRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,7 +111,7 @@ export const SettingsPage = () => {
                 <div>
                   <p className="label-wood">{t('uploadLogo')}</p>
                   <input ref={logoRef} type="file" accept="image/*" onChange={onLogo} className="hidden" />
-                  <Button variant="outline" size="sm" onClick={() => logoRef.current?.click()}><Upload size={15} />{t('uploadLogo')}</Button>
+                  <Button variant="outline" size="sm" disabled={logoBusy} onClick={() => logoRef.current?.click()}><Upload size={15} />{logoBusy ? t('compressingImage') : t('uploadLogo')}</Button>
                 </div>
               </div>
               <Input label={t('storeName')} value={store.name} onChange={(e) => setStore({ ...store, name: e.target.value })} />

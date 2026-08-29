@@ -472,6 +472,9 @@ export const fr = {
   uploadImage: 'Choisir une image',
   faviconHint: 'Carré, 64×64 px minimum (PNG, SVG ou ICO).',
   heroHint: 'Grande image panoramique affichée derrière le titre.',
+  compressingImage: 'Compression…',
+  imageCompressed: 'Image compressée',
+  imageUploadFailed: 'Image illisible',
   // ── Website orders ──────────────────────────────────────────────
   webOrdersSubtitle: 'Suivez et traitez les commandes de la boutique en ligne',
   orderStatus_pending: 'En attente',
@@ -1040,6 +1043,9 @@ export const ar: Record<TranslationKey, string> = {
   uploadImage: 'اختر صورة',
   faviconHint: 'مربّعة، 64×64 بكسل على الأقل.',
   heroHint: 'صورة عريضة تظهر خلف العنوان.',
+  compressingImage: 'جارٍ الضغط…',
+  imageCompressed: 'تم ضغط الصورة',
+  imageUploadFailed: 'تعذّرت قراءة الصورة',
   // ── Website orders ──────────────────────────────────────────────
   webOrdersSubtitle: 'تابع وعالج طلبات المتجر الإلكتروني',
   orderStatus_pending: 'قيد الانتظار',

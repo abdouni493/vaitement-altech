@@ -121,6 +121,59 @@ VITE_SUPABASE_ANON_KEY=<anon-public-key>
 
 ---
 
+## Images — compression automatique
+
+Toute image choisie dans l'application passe par une seule porte,
+[`uploadImage`](src/lib/imageUpload.ts), avant d'être stockée où que ce soit.
+Une photo de téléphone de 5 à 12 Mo n'arrive **jamais** telle quelle dans le
+bucket : elle est recompressée dans le navigateur, à la manière de Squoosh, mais
+automatiquement.
+
+**Le traitement, en trois temps :**
+
+1. **Redimensionnement** à l'arête la plus longue du profil — une photo de
+   4032 px n'a aucun intérêt dans une carte de 400 px.
+2. **Ré-encodage en WebP** quand le navigateur sait le faire, JPEG sinon. WebP
+   est environ 30 % plus léger que JPEG à qualité perçue égale, et les quatre
+   buckets l'acceptent.
+3. **Recherche dichotomique de la qualité** jusqu'à ce que le fichier tienne
+   dans le poids cible du profil. C'est cette étape qui transforme un original
+   de 10 Mo en ~400 Ko.
+
+Le calcul tourne dans un **Web Worker** ([`browser-image-compression`](https://github.com/Donaldcwl/browser-image-compression)),
+donc l'interface reste fluide même pendant une galerie de six photos, et le
+codec est chargé **à la demande** : il ne pèse pas sur le démarrage d'une session
+qui ne touche jamais à une image.
+
+**Les profils**, définis dans [`src/utils/media.ts`](src/utils/media.ts) :
+
+| Profil | Arête max | Poids cible | Utilisé par |
+|--------|-----------|-------------|-------------|
+| `product` | 1600 px | 450 Ko | Photos d'article (stock et site web) |
+| `hero` | 1920 px | 600 Ko | Image de fond de la page d'accueil |
+| `offer` | 1280 px | 350 Ko | Visuel d'offre spéciale |
+| `logo` | 512 px | 120 Ko | Logo de la boutique (Paramètres) |
+| `carrier` | 320 px | 60 Ko | Logo d'une société de livraison |
+| `favicon` | 256 px | 40 Ko | Favicon du site |
+
+**Où finissent les octets :**
+
+- **Supabase configuré et joignable** → le fichier compressé part dans son
+  bucket et l'application ne garde que l'URL publique. La ligne IndexedDB porte
+  alors ~100 caractères au lieu d'un blob base64 de 700 Ko : les sauvegardes
+  restent légères et la vitrine sert ses images depuis le CDN.
+- **Sinon** → l'URL de données compressée est stockée localement, exactement
+  comme avant. La boutique est **locale d'abord** : une coupure réseau ne doit
+  jamais bloquer une vente, donc un échec d'envoi se dégrade en silence au lieu
+  de lever une erreur.
+
+Les formats vectoriels (SVG, ICO) et les fichiers déjà plus légers que la cible
+sont conservés octet pour octet — il n'y a plus rien à gagner, seulement du
+détail à perdre. Le gain est affiché à l'utilisateur après chaque envoi
+(« Image compressée · 4,8 Mo → 412 Ko (−91 %) »).
+
+---
+
 ## Permissions
 
 L'administrateur coche, pour chaque employé, les modules autorisés et les
@@ -135,4 +188,4 @@ via `has_permission(module, action)`.
 
 React 18 · TypeScript · Vite · Tailwind CSS · Zustand (+ IndexedDB) ·
 React Router · Framer Motion · Emotion · Recharts · react-hook-form + Zod ·
-Supabase.
+Supabase · browser-image-compression.

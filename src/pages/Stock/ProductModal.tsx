@@ -335,7 +335,16 @@ export const ProductModal = ({ open, onClose, product, onSaved, presetName }: Pr
               ({t('optional')})
             </span>
           </h4>
-          <ImageGallery value={images} onChange={setImages} hint={t('imagesHint')} />
+          <ImageGallery
+            value={images}
+            onChange={setImages}
+            hint={t('imagesHint')}
+            bucket="product-images"
+            // A new article has no id yet, so its photos land in a shared
+            // folder; every object is randomly named, so nothing collides.
+            folder={product?.id ?? 'nouveau'}
+            preset="product"
+          />
         </section>
 
         {/* ── Sizes ──────────────────────────────────────────────────────── */}
