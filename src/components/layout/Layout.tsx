@@ -18,6 +18,12 @@ export const Layout = () => {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // On mobile, opening an interface from the sidebar hides the sidebar again so
+  // the chosen page gets the whole screen — the expected app-like behaviour.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setCollapsed(true)
+  }, [location.pathname])
+
   return (
     <div className="flex h-screen overflow-hidden bg-wood-bg">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
