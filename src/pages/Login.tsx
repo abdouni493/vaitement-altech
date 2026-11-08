@@ -13,6 +13,7 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -39,6 +40,7 @@ export const Login = () => {
   const location = useLocation()
   const currentUser = useAuthStore((s) => s.currentUser)
   const login = useAuthStore((s) => s.login)
+  const loginDemo = useAuthStore((s) => s.loginDemo)
   const createAdmin = useAuthStore((s) => s.createAdmin)
   const adminExists = useAuthStore((s) => s.adminExists)
   const dbError = useAuthStore((s) => s.dbError)
@@ -126,6 +128,19 @@ export const Login = () => {
       setShowCreate(false)
       if (result.signedIn) navigate('/dashboard', { replace: true })
       else toast(t('confirmEmailToSignIn'), { icon: 'ℹ️', duration: 6000 })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onDemo = async () => {
+    setBusy(true)
+    try {
+      const result = await loginDemo()
+      if (result.ok) {
+        toast.success(`${t('welcomeBack')}, ${result.user.fullName}`)
+        navigate(from, { replace: true })
+      }
     } finally {
       setBusy(false)
     }
@@ -278,6 +293,27 @@ export const Login = () => {
               {t('login')}
             </button>
           </form>
+
+          {/* Demo access — no database, no credentials required */}
+          <div className="mt-5">
+            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-white/30">
+              <span className="h-px flex-1 bg-white/10" />
+              {t('or')}
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <button
+              type="button"
+              onClick={onDemo}
+              disabled={busy}
+              className="mt-5 flex w-full items-center justify-center gap-2 border border-white/25 bg-white/[0.04] px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-white transition hover:border-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Sparkles size={16} />
+              {t('loginWithDemo')}
+            </button>
+            <p className="mt-2 text-center text-[11px] leading-relaxed text-white/40">
+              {t('demoHint')}
+            </p>
+          </div>
 
           {/* The project answered neither yes nor no: it cannot be reached, or
               the SQL in `supabase/` has never been run against it. Saying so

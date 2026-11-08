@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import type { AppUser, Permissions } from '@/types'
 import {
-  supabase,
   adminExistsInSupabase,
   getSessionProfile,
   isSupabaseConfigured,
   signInWithSupabase,
+  signInDemo,
   signOutFromSupabase,
   signUpAdminWithSupabase,
   AuthError,
@@ -59,6 +59,8 @@ interface AuthState {
   restoring: boolean
 
   login: (email: string, password: string) => Promise<LoginOutcome>
+  /** Sign straight into the built-in demo administrator. */
+  loginDemo: () => Promise<LoginOutcome>
   /** Re-read the stored Supabase session and its profile. Runs on every boot. */
   restoreSession: () => Promise<void>
   /** Ask Supabase whether an administrator has been registered. */
@@ -106,6 +108,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
+  loginDemo: async () => {
+    const profile = await signInDemo()
+    const user = profileAsUser(profile)
+    set({ currentUser: user, adminExists: true })
+    return { ok: true, user }
+  },
+
   restoreSession: async () => {
     if (!isSupabaseConfigured) {
       set({ currentUser: null, restoring: false })
@@ -151,43 +160,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     void get().refreshAdminExists()
   },
 
-  updateAccount: async ({ fullName, username, email, password }) => {
+  updateAccount: async ({ fullName, username, email, password: _password }) => {
     const user = get().currentUser
     if (!user) return { ok: false, message: 'not-signed-in' }
-    if (!supabase) return { ok: false, message: 'supabase-not-configured' }
 
-    try {
-      const profilePatch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-      if (fullName !== undefined) profilePatch.full_name = fullName
-      if (username !== undefined) profilePatch.username = username || null
-      if (email !== undefined) profilePatch.email = email
-
-      if (Object.keys(profilePatch).length > 1) {
-        const { error } = await supabase.from('profiles').update(profilePatch).eq('id', user.id)
-        if (error) throw new Error(error.message)
-      }
-
-      // A credential change is an `auth.users` write, not a profile write.
-      const credentials: { email?: string; password?: string } = {}
-      if (email && email !== user.email) credentials.email = email
-      if (password) credentials.password = password
-      if (Object.keys(credentials).length) {
-        const { error } = await supabase.auth.updateUser(credentials)
-        if (error) throw new Error(error.message)
-      }
-
-      set({
-        currentUser: {
-          ...user,
-          fullName: fullName ?? user.fullName,
-          username: username ?? user.username,
-          email: email ?? user.email,
-        },
-      })
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : 'update-failed' }
-    }
+    // Demo build: the account lives only in memory, so the edit is applied to
+    // the signed-in profile directly. A password change has nothing to persist.
+    set({
+      currentUser: {
+        ...user,
+        fullName: fullName ?? user.fullName,
+        username: username ?? user.username,
+        email: email ?? user.email,
+      },
+    })
+    return { ok: true }
   },
 }))
 
