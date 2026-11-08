@@ -64,6 +64,7 @@ export const fr = {
   // Auth
   login: 'Se connecter',
   logout: 'Déconnexion',
+  menu: 'Menu',
   password: 'Mot de passe',
   confirmPassword: 'Confirmer le mot de passe',
   fullName: 'Nom complet',
@@ -676,6 +677,7 @@ export const ar: Record<TranslationKey, string> = {
   inDebt: 'بدين',
   login: 'تسجيل الدخول',
   logout: 'تسجيل الخروج',
+  menu: 'القائمة',
   password: 'كلمة المرور',
   confirmPassword: 'تأكيد كلمة المرور',
   fullName: 'الاسم الكامل',

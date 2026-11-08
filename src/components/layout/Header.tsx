@@ -12,6 +12,7 @@ import {
   Sun,
   ExternalLink,
   ShoppingBag,
+  Menu,
 } from 'lucide-react'
 import { useTranslation } from '@/i18n/useTranslation'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -22,7 +23,13 @@ import { NAV_ITEMS } from './navConfig'
 import { initials, brokenSizes, formatMoney } from '@/utils/helpers'
 import type { Product } from '@/types'
 
-export const Header = () => {
+interface HeaderProps {
+  /** Show the hamburger that opens the mobile sidebar drawer. */
+  showMenuButton?: boolean
+  onOpenMenu?: () => void
+}
+
+export const Header = ({ showMenuButton = false, onOpenMenu }: HeaderProps) => {
   const { t, toggleLang, lang } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -67,6 +74,16 @@ export const Header = () => {
     <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-wood-light bg-wood-white/90 px-4 py-2.5 backdrop-blur-md sm:px-6">
       {/* Breadcrumb */}
       <div className="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+        {showMenuButton && (
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={onOpenMenu}
+            aria-label={t('menu')}
+            className="-ms-1 me-1 flex shrink-0 items-center justify-center p-1.5 text-wood-dark lg:hidden"
+          >
+            <Menu size={20} />
+          </motion.button>
+        )}
         <Link to="/dashboard" className="shrink-0 text-wood-medium transition hover:text-wood-dark">
           {t('appName')}
         </Link>

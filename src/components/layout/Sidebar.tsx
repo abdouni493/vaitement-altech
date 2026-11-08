@@ -11,10 +11,12 @@ import { clsx } from '@/utils/clsx'
 
 interface SidebarProps {
   collapsed: boolean
+  /** On mobile the sidebar is an overlay drawer that slides fully off-screen. */
+  isMobile?: boolean
   onToggle: () => void
 }
 
-export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
+export const Sidebar = ({ collapsed, isMobile = false, onToggle }: SidebarProps) => {
   const { t, isRTL } = useTranslation()
   const navigate = useNavigate()
   const currentUser = useAuthStore((s) => s.currentUser)
@@ -97,11 +99,23 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     )
   }
 
+  // On mobile the sidebar is a full-width-of-itself overlay drawer that slides
+  // completely off-screen when collapsed — icons and all — so the page gets the
+  // whole viewport. On desktop it stays a flex child that shrinks to an icon rail.
+  const hiddenOffset = isRTL ? '100%' : '-100%'
+
   return (
     <motion.aside
-      animate={{ width: collapsed ? 72 : 236 }}
+      animate={
+        isMobile
+          ? { width: 236, x: collapsed ? hiddenOffset : 0 }
+          : { width: collapsed ? 72 : 236, x: 0 }
+      }
       transition={{ type: 'spring', damping: 28, stiffness: 260 }}
-      className="wood-grain relative z-30 flex h-screen flex-col bg-wood-sidebar"
+      className={clsx(
+        'wood-grain flex h-screen flex-col bg-wood-sidebar',
+        isMobile ? '!fixed inset-y-0 start-0 z-40 shadow-wood-lg' : 'relative z-30',
+      )}
     >
       {/* Brand */}
       <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5">
@@ -133,14 +147,17 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
         </AnimatePresence>
       </div>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={onToggle}
-        aria-label="toggle sidebar"
-        className="absolute -end-3 top-[70px] z-40 flex h-6 w-6 items-center justify-center border border-wood-light bg-wood-white text-wood-dark transition hover:bg-wood-cream"
-      >
-        <CollapseIcon size={13} />
-      </button>
+      {/* Collapse toggle — desktop only; on mobile the header menu and the
+          backdrop drive the drawer, so this peeking tab is hidden. */}
+      {!isMobile && (
+        <button
+          onClick={onToggle}
+          aria-label="toggle sidebar"
+          className="absolute -end-3 top-[70px] z-40 flex h-6 w-6 items-center justify-center border border-wood-light bg-wood-white text-wood-dark transition hover:bg-wood-cream"
+        >
+          <CollapseIcon size={13} />
+        </button>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3">
